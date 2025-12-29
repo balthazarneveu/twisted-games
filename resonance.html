@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Resonance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        
+        body {
+            background-color: #020205;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .neon-text {
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.8);
+        }
+
+        /* Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+            width: 100%;
+            height: 44px;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 32px;
+            width: 32px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -15px;
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.6);
+            border: 6px solid #020205;
+        }
+
+        /* Top Bar Timer */
+        .timer-track {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.05);
+            z-index: 100;
+        }
+
+        #timer-fill {
+            height: 100%;
+            width: 100%;
+            background: #00f2ff;
+            box-shadow: 0 0 15px #00f2ff;
+            transition: width 0.1s linear;
+        }
+
+        #status-msg {
+            pointer-events: none;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .control-group {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .control-hidden {
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+            transform: translateY(10px);
+        }
+    </style>
+</head>
+<body class="p-6">
+
+    <div class="timer-track">
+        <div id="timer-fill"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="w-full text-center py-4 shrink-0">
+        <h1 class="text-xl md:text-2xl font-bold tracking-[0.6em] uppercase neon-text italic">Resonance</h1>
+        <p id="level-name" class="text-[9px] uppercase tracking-[0.4em] text-cyan-400 opacity-50 mt-1">Classic Sine</p>
+    </div>
+
+    <!-- Main Game Area -->
+    <div id="canvas-container" class="relative w-full flex-grow flex items-center justify-center overflow-hidden">
+        <canvas id="gameCanvas" class="w-full h-full"></canvas>
+        <div id="status-msg" class="absolute font-bold tracking-[0.5em] text-white uppercase text-sm opacity-0 scale-50 z-10">
+            Resonated
+        </div>
+    </div>
+
+    <!-- Controls Container -->
+    <div class="w-full max-w-md mx-auto py-6 shrink-0">
+        
+        <!-- Primary Freq Slider -->
+        <div id="group-f1" class="control-group space-y-2 mb-4">
+            <div class="flex justify-between text-[10px] text-cyan-400 font-bold uppercase tracking-widest opacity-60">
+                <span id="label-f1">Frequency</span>
+                <span id="val-f1" class="font-mono text-xs">4.0</span>
+            </div>
+            <input type="range" id="slider-f1" min="1.0" max="8.0" step="0.01" value="4">
+        </div>
+
+        <!-- Secondary Param Slider -->
+        <div id="group-p" class="control-group space-y-2 mb-4">
+            <div class="flex justify-between text-[10px] text-purple-400 font-bold uppercase tracking-widest opacity-60">
+                <span id="label-p">Phase</span>
+                <span id="val-p" class="font-mono text-xs">0.0</span>
+            </div>
+            <input type="range" id="slider-p" min="0" max="6.28" step="0.01" value="0">
+        </div>
+
+        <!-- Tertiary Slider -->
+        <div id="group-f2" class="control-group space-y-2 control-hidden">
+            <div class="flex justify-between text-[10px] text-emerald-400 font-bold uppercase tracking-widest opacity-60">
+                <span id="label-f2">Depth</span>
+                <span id="val-f2" class="font-mono text-xs">1.0</span>
+            </div>
+            <input type="range" id="slider-f2" min="0.0" max="1.0" step="0.01" value="0.5">
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const container = document.getElementById('canvas-container');
+        const ctx = canvas.getContext('2d');
+        
+        const sliders = {
+            f1: document.getElementById('slider-f1'),
+            p: document.getElementById('slider-p'),
+            f2: document.getElementById('slider-f2')
+        };
+        
+        const labels = {
+            f1: document.getElementById('val-f1'),
+            p: document.getElementById('val-p'),
+            f2: document.getElementById('val-f2'),
+            level: document.getElementById('level-name'),
+            labelF1: document.getElementById('label-f1'),
+            labelP: document.getElementById('label-p'),
+            labelF2: document.getElementById('label-f2')
+        };
+
+        const groups = {
+            p: document.getElementById('group-p'),
+            f2: document.getElementById('group-f2')
+        };
+
+        const timerFill = document.getElementById('timer-fill');
+        const statusMsg = document.getElementById('status-msg');
+        
+        let width = 0, height = 0;
+        let isWon = false, winTime = 0, startTime = 0;
+        let sparkles = [];
+        
+        let currentLevel = 'classic';
+        let target = { f1: 0, p: 0, f2: 0 };
+        let player = { f1: 0, p: 0, f2: 0 };
+        let currentDuration = 12000;
+
+        const LEVELS = [
+            { type: 'classic', dur: 12000, name: 'Classic Resonance' },
+            { type: 'mod', dur: 16000, name: 'Amplitude Modulation' },
+            { type: 'decay', dur: 8000, name: 'Exponential Decay' }
+        ];
+
+        function forceResize() {
+            const rect = container.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const w = rect.width || window.innerWidth * 0.8;
+            const h = rect.height || 300;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            width = canvas.width;
+            height = canvas.height;
+        }
+
+        function initLevel() {
+            const config = LEVELS[Math.floor(Math.random() * LEVELS.length)];
+            currentLevel = config.type;
+            currentDuration = config.dur;
+            labels.level.innerText = config.name;
+
+            groups.p.classList.remove('control-hidden');
+            groups.f2.classList.add('control-hidden');
+            labels.labelF1.innerText = "Frequency";
+            labels.labelP.innerText = "Phase";
+            sliders.f1.min = "1.0"; sliders.f1.max = "8.0"; sliders.f1.step = "0.01";
+            sliders.p.min = "0.0"; sliders.p.max = "6.28"; sliders.p.step = "0.01";
+
+            if (currentLevel === 'classic') {
+                target.f1 = 2 + Math.random() * 5;
+                target.p = Math.random() * Math.PI * 2;
+                sliders.f1.value = 4.0;
+            } else if (currentLevel === 'mod') {
+                target.f1 = Math.floor(3 + Math.random() * 5); 
+                target.p = 0; 
+                target.f2 = 0.4 + Math.random() * 0.5; 
+                groups.p.classList.add('control-hidden');
+                groups.f2.classList.remove('control-hidden');
+                labels.labelF1.innerText = "Carrier Multiplier";
+                labels.labelF2.innerText = "Symmetry Depth";
+                sliders.f1.min = "1.0"; sliders.f1.max = "10.0"; sliders.f1.step = "1.0";
+                sliders.f1.value = 5.0;
+                sliders.f2.value = 0.5;
+            } else if (currentLevel === 'decay') {
+                target.f1 = 0.05 + Math.random() * 0.15; 
+                target.p = 2 + Math.random() * 6; 
+                labels.labelF1.innerText = "Decay Coefficient";
+                labels.labelP.innerText = "Oscillation Speed";
+                sliders.f1.min = "0.01"; sliders.f1.max = "0.3";
+                sliders.p.min = "1.0"; sliders.p.max = "10.0";
+                sliders.f1.value = 0.1;
+                sliders.p.value = 4.0;
+            }
+
+            isWon = false; winTime = 0; startTime = Date.now();
+            sparkles = []; statusMsg.style.opacity = '0';
+            statusMsg.style.transform = 'scale(0.5)';
+            forceResize();
+        }
+
+        class Sparkle {
+            constructor() {
+                this.x = width / 2; this.y = height / 2;
+                this.color = Math.random() > 0.5 ? '#00f2ff' : '#ffffff';
+                this.size = Math.random() * 5 + 2;
+                this.vx = (Math.random() - 0.5) * 20; this.vy = (Math.random() - 0.5) * 20;
+                this.life = 1;
+            }
+            update() { this.x += this.vx; this.y += this.vy; this.vx *= 0.96; this.vy *= 0.96; this.life -= 0.02; }
+            draw() {
+                ctx.globalAlpha = this.life; ctx.shadowBlur = 10; ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        function calculateY(xNorm, f1, p, f2, mode) {
+            const cy = height / 2;
+            const amp = height * 0.28;
+            if (mode === 'classic') return cy + Math.sin(xNorm * Math.PI * 2 * f1 + p) * amp;
+            if (mode === 'mod') return cy + Math.sin(xNorm * Math.PI * 2 * f1) * (f2 * Math.sin(xNorm * Math.PI)) * amp;
+            if (mode === 'decay') return cy + Math.cos(xNorm * Math.PI * 2 * p) * Math.exp(-xNorm * 10 * f1) * amp;
+            return cy;
+        }
+
+        function drawWave(f1, p, f2, mode, color, thick, glow) {
+            if (!width || !height) return;
+            ctx.save();
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = thick; ctx.lineCap = 'round';
+            if (glow > 0) { ctx.shadowBlur = glow; ctx.shadowColor = color; }
+            for (let x = 0; x <= width; x += 3) {
+                const y = calculateY(x/width, f1, p, f2, mode);
+                if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke(); ctx.restore();
+        }
+
+        function loop() {
+            const rect = container.getBoundingClientRect();
+            if (canvas.width !== Math.floor(rect.width * (window.devicePixelRatio || 1))) forceResize();
+
+            const now = Date.now();
+            if (isWon) {
+                if (now - winTime > 1500) initLevel();
+            } else {
+                const progress = Math.max(0, 1 - ((now - startTime) / currentDuration));
+                timerFill.style.width = (progress * 100) + '%';
+                if (progress <= 0) initLevel();
+
+                player.f1 = parseFloat(sliders.f1.value);
+                player.p = parseFloat(sliders.p.value);
+                player.f2 = parseFloat(sliders.f2.value);
+
+                let match = false;
+                if (currentLevel === 'classic') match = (Math.abs(player.f1 - target.f1) < 0.3 && Math.abs(player.p - target.p) < 0.4);
+                else if (currentLevel === 'mod') match = (Math.abs(player.f1 - target.f1) < 0.1 && Math.abs(player.f2 - target.f2) < 0.15);
+                else if (currentLevel === 'decay') match = (Math.abs(player.f1 - target.f1) < 0.02 && Math.abs(player.p - target.p) < 0.4);
+
+                if (match) {
+                    isWon = true; winTime = now;
+                    Object.assign(player, target);
+                    statusMsg.style.opacity = '1'; statusMsg.style.transform = 'scale(1.2)';
+                    for(let i=0; i<60; i++) sparkles.push(new Sparkle());
+                    if (navigator.vibrate) navigator.vibrate(50);
+                }
+            }
+
+            labels.f1.innerText = player.f1.toFixed(currentLevel === 'decay' ? 3 : 1);
+            labels.p.innerText = player.p.toFixed(2);
+            labels.f2.innerText = player.f2.toFixed(2);
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw Target Ghost - MODIFIED FOR HIGH VISIBILITY
+            // Increased thickness to 4 and color to semi-transparent white
+            drawWave(target.f1, target.p, target.f2, currentLevel, 'rgba(255, 255, 255, 0.35)', 4, 0);
+
+            // Calculate Proximity
+            let prox = 0;
+            if (currentLevel === 'classic') prox = Math.max(0, 1 - (Math.abs(player.f1-target.f1)/1.5 + Math.abs(player.p-target.p)/1.5));
+            else if (currentLevel === 'mod') prox = Math.max(0, 1 - (Math.abs(player.f1-target.f1)/2 + Math.abs(player.f2-target.f2)/0.6));
+            else prox = Math.max(0, 1 - (Math.abs(player.f1-target.f1)/0.1 + Math.abs(player.p-target.p)/3.0));
+
+            let color = isWon ? '#ffffff' : `rgb(${Math.floor(168*(1-prox))}, ${Math.floor(80+175*prox)}, 255)`;
+            drawWave(player.f1, player.p, player.f2, currentLevel, color, isWon ? 8 : 4 + prox*2, 5 + prox*30);
+
+            ctx.globalCompositeOperation = 'screen';
+            for (let i = sparkles.length - 1; i >= 0; i--) {
+                sparkles[i].update(); sparkles[i].draw();
+                if (sparkles[i].life <= 0) sparkles.splice(i, 1);
+            }
+            ctx.globalCompositeOperation = 'source-over';
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('resize', forceResize);
+        window.onload = () => { initLevel(); loop(); };
+    </script>
+</body>
+</html>
