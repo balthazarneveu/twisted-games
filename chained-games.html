@@ -38,11 +38,13 @@
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.8s ease-in-out;
+            visibility: hidden;
         }
 
         .game-iframe.active {
             opacity: 1;
             pointer-events: all;
+            visibility: visible;
         }
 
         #transition-overlay {
@@ -166,6 +168,7 @@
     <div id="game-wrapper">
     <iframe id="pinball-iframe" class="game-iframe" tabindex="0"></iframe>
     <iframe id="snow-iframe" class="game-iframe" tabindex="0"></iframe>
+    <iframe id="resonance-iframe" class="game-iframe" tabindex="0"></iframe>
 </div>
 
 <div id="transition-overlay">
@@ -177,10 +180,12 @@
     // Game timeout configuration (in seconds) - set all timeouts here
     const GAME_TIMEOUTS = {
         pinball: 5,
-        snow: 5
+        snow: 5,
+        resonance: 5
     };
 
     const games = [
+        { id: 'resonance', iframeId: 'resonance-iframe', file: 'resonance.html', timeout: GAME_TIMEOUTS.resonance },
         { id: 'pinball', iframeId: 'pinball-iframe', file: 'pinball_wizard.html', timeout: GAME_TIMEOUTS.pinball },
         { id: 'snow', iframeId: 'snow-iframe', file: 'snow_ninja.html', timeout: GAME_TIMEOUTS.snow }
     ];
@@ -366,45 +371,59 @@
         
         // Load and show the selected game
         const iframe = document.getElementById(game.iframeId);
-        if (iframe) {
-            // Always reload to ensure fresh start
-            iframe.src = 'about:blank';
-            
-            // Wait a moment, then load the game
-            setTimeout(() => {
-                iframe.src = game.file;
-                
-                // Wait for iframe to load before showing
-                iframe.onload = () => {
-                    setTimeout(() => {
-                        iframe.classList.add('active');
-                        // Focus the iframe so it can receive keyboard events
-                        const focusIframe = () => {
-                            try {
-                                // Focus the iframe element first
-                                iframe.focus();
-                                // Then focus the iframe's window (same origin, should work)
-                                if (iframe.contentWindow) {
-                                    iframe.contentWindow.focus();
-                                    // Also focus the iframe's document body
-                                    if (iframe.contentDocument && iframe.contentDocument.body) {
-                                        iframe.contentDocument.body.focus();
-                                    }
-                                }
-                            } catch (e) {
-                                // Cross-origin restrictions might prevent this, keyboard forwarding will handle it
-                            }
-                        };
-                        focusIframe();
-                        
-                        // Also focus on click to ensure keyboard events work
-                        iframe.addEventListener('click', focusIframe);
-                        // Start timeout for this game
-                        startGameTimeout(game);
-                    }, 200);
-                };
-            }, 100);
+        if (!iframe) {
+            console.error('Iframe not found:', game.iframeId);
+            return;
         }
+        
+        console.log('Loading game:', game.id, game.file);
+        
+        // Always reload to ensure fresh start
+        iframe.src = 'about:blank';
+        
+        // Wait a moment, then load the game
+        setTimeout(() => {
+            iframe.src = game.file;
+            
+            // Wait for iframe to load before showing
+            iframe.onload = () => {
+                console.log('Iframe loaded:', game.id);
+                setTimeout(() => {
+                    iframe.classList.add('active');
+                    iframe.style.visibility = 'visible';
+                    console.log('Game activated:', game.id);
+                    // Focus the iframe so it can receive keyboard events
+                    const focusIframe = () => {
+                        try {
+                            // Focus the iframe element first
+                            iframe.focus();
+                            // Then focus the iframe's window (same origin, should work)
+                            if (iframe.contentWindow) {
+                                iframe.contentWindow.focus();
+                                // Also focus the iframe's document body
+                                if (iframe.contentDocument && iframe.contentDocument.body) {
+                                    iframe.contentDocument.body.focus();
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('Could not focus iframe:', e);
+                        }
+                    };
+                    focusIframe();
+                    
+                    // Also focus on click to ensure keyboard events work
+                    iframe.onclick = focusIframe;
+                    
+                    // Start timeout for this game
+                    startGameTimeout(game);
+                }, 500);
+            };
+            
+            // Handle load errors
+            iframe.onerror = () => {
+                console.error('Error loading iframe:', game.file);
+            };
+        }, 100);
     }
 
     function requestFullscreen() {
@@ -441,30 +460,40 @@
 
     // Forward keyboard events to active game iframe
     function forwardKeyboardEvent(event) {
-        const activeGame = games[currentGameIndex];
-        if (activeGame) {
-            const iframe = document.getElementById(activeGame.iframeId);
-            if (iframe && iframe.classList.contains('active') && iframe.contentWindow) {
-                try {
-                    // Forward the keyboard event to the iframe
-                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                    const newEvent = new KeyboardEvent(event.type, {
-                        key: event.key,
-                        code: event.code,
-                        keyCode: event.keyCode,
-                        which: event.which,
-                        shiftKey: event.shiftKey,
-                        ctrlKey: event.ctrlKey,
-                        altKey: event.altKey,
-                        metaKey: event.metaKey,
-                        bubbles: true,
-                        cancelable: true
-                    });
-                    iframe.contentWindow.dispatchEvent(newEvent);
-                } catch (e) {
-                    // Cross-origin restrictions might prevent this
-                    // In that case, the iframe should handle its own events
-                }
+        // Find the currently active game by checking which iframe has the 'active' class
+        let activeIframe = null;
+        let activeGame = null;
+        
+        for (let i = 0; i < games.length; i++) {
+            const iframe = document.getElementById(games[i].iframeId);
+            if (iframe && iframe.classList.contains('active')) {
+                activeIframe = iframe;
+                activeGame = games[i];
+                // Update currentGameIndex to match
+                currentGameIndex = i;
+                break;
+            }
+        }
+        
+        if (activeIframe && activeIframe.contentWindow) {
+            try {
+                // Forward the keyboard event to the iframe
+                const newEvent = new KeyboardEvent(event.type, {
+                    key: event.key,
+                    code: event.code,
+                    keyCode: event.keyCode,
+                    which: event.which,
+                    shiftKey: event.shiftKey,
+                    ctrlKey: event.ctrlKey,
+                    altKey: event.altKey,
+                    metaKey: event.metaKey,
+                    bubbles: true,
+                    cancelable: true
+                });
+                activeIframe.contentWindow.dispatchEvent(newEvent);
+            } catch (e) {
+                // Cross-origin restrictions might prevent this
+                // In that case, the iframe should handle its own events
             }
         }
     }

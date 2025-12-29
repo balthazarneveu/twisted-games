@@ -17,7 +17,36 @@
             -webkit-user-select: none;
             user-select: none;
             height: 100vh;
+            width: 100vw;
             margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        
+        html {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        /* Ensure visibility in iframe */
+        body.in-iframe {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        body.in-iframe .p-6 {
+            padding: 1.5rem;
+            height: 100%;
             display: flex;
             flex-direction: column;
         }
@@ -175,6 +204,11 @@
         let target = { f1: 0, p: 0, f2: 0 };
         let player = { f1: 0, p: 0, f2: 0 };
         let currentDuration = 12000;
+        let timeLeft = 0;
+        let totalTime = 0;
+        let useParentTimer = false;
+        let gameActive = true;
+        let score = 0;
 
         const LEVELS = [
             { type: 'classic', dur: 12000, name: 'Classic Resonance' },
@@ -194,6 +228,11 @@
         }
 
         function initLevel() {
+            // Don't auto-restart if in iframe and game is not active
+            if (window.parent !== window && !gameActive) {
+                return;
+            }
+            
             const config = LEVELS[Math.floor(Math.random() * LEVELS.length)];
             currentLevel = config.type;
             currentDuration = config.dur;
@@ -274,17 +313,58 @@
             ctx.stroke(); ctx.restore();
         }
 
+        function updateTimerBar() {
+            if (!timerFill) return;
+            const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+            timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+            
+            // Change color when time is running low
+            if (percentage < 20) {
+                timerFill.style.background = '#ff0000';
+                timerFill.style.boxShadow = '0 0 15px rgba(255, 0, 0, 0.8)';
+            } else if (percentage < 50) {
+                timerFill.style.background = '#ff9800';
+                timerFill.style.boxShadow = '0 0 10px rgba(255, 152, 0, 0.6)';
+            } else {
+                timerFill.style.background = '#00f2ff';
+                timerFill.style.boxShadow = '0 0 15px #00f2ff';
+            }
+        }
+
+        function endGame() {
+            if (!gameActive) return;
+            gameActive = false;
+            
+            // Notify parent if in iframe
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'gameComplete', game: 'resonance', score: score }, '*');
+            }
+        }
+
         function loop() {
             const rect = container.getBoundingClientRect();
             if (canvas.width !== Math.floor(rect.width * (window.devicePixelRatio || 1))) forceResize();
 
             const now = Date.now();
             if (isWon) {
-                if (now - winTime > 1500) initLevel();
+                if (now - winTime > 1500) {
+                    score++;
+                    initLevel();
+                }
             } else {
-                const progress = Math.max(0, 1 - ((now - startTime) / currentDuration));
-                timerFill.style.width = (progress * 100) + '%';
-                if (progress <= 0) initLevel();
+                // Use parent timer if in iframe, otherwise use internal timer
+                if (useParentTimer) {
+                    updateTimerBar();
+                    // Only end game if timeLeft is actually 0 and we've been playing
+                    if (timeLeft <= 0 && totalTime > 0) {
+                        endGame();
+                        return;
+                    }
+                } else {
+                    const progress = Math.max(0, 1 - ((now - startTime) / currentDuration));
+                    timerFill.style.width = (progress * 100) + '%';
+                    if (progress <= 0) initLevel();
+                }
 
                 player.f1 = parseFloat(sliders.f1.value);
                 player.p = parseFloat(sliders.p.value);
@@ -329,11 +409,51 @@
                 if (sparkles[i].life <= 0) sparkles.splice(i, 1);
             }
             ctx.globalCompositeOperation = 'source-over';
-            requestAnimationFrame(loop);
+            
+            // Continue loop only if game is active
+            if (gameActive) {
+                requestAnimationFrame(loop);
+            }
+        }
+
+        // Listen for timeout and time update messages from parent if in iframe
+        if (window.parent !== window) {
+            document.body.classList.add('in-iframe');
+            useParentTimer = true;
+            console.log('Resonance: Listening for parent messages');
+            window.addEventListener('message', (event) => {
+                console.log('Resonance: Received message:', event.data?.type, event.data);
+                if (event.data && event.data.type === 'gameTimeout') {
+                    if (gameActive) {
+                        console.log('Resonance: Game timeout received');
+                        timeLeft = 0;
+                        endGame();
+                    }
+                } else if (event.data && event.data.type === 'timeUpdate') {
+                    timeLeft = event.data.timeLeft;
+                    totalTime = event.data.totalTime;
+                    console.log('Resonance: Time update', timeLeft, '/', totalTime);
+                    updateTimerBar();
+                }
+            });
         }
 
         window.addEventListener('resize', forceResize);
-        window.onload = () => { initLevel(); loop(); };
+        
+        function startGame() {
+            console.log('Resonance: Starting game');
+            gameActive = true;
+            score = 0;
+            initLevel(); 
+            loop();
+        }
+        
+        // Start game on load, or immediately if already loaded
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(startGame, 100);
+        } else {
+            window.onload = () => setTimeout(startGame, 100);
+        }
     </script>
 </body>
 </html>
