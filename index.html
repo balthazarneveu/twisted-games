@@ -4,10 +4,56 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini jeux fous</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 30px;
+        }
+        .game-button {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(to bottom, #020c1b 0%, #0a2a5a 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin: 0 auto;
+        }
+        .game-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        .game-button:active {
+            transform: translateY(0);
+        }
+    </style>
 </head>
 <body>
     <h1>Les mini jeux fous de Balthou</h1>
     <img src="teaser.png" alt="Teaser image">
+    <a href="snow_ninja.html" class="game-button">Jouer à Snow Ninja</a>
 </body>
 </html>
 
