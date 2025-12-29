@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chained Mini Games</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        #game-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s ease-in-out;
+        }
+
+        .game-iframe.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        #transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        #transition-overlay.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        #transition-text {
+            color: #fff;
+            font-size: 3rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 10px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            animation: pulse 1s ease-in-out infinite;
+            margin-bottom: 20px;
+        }
+
+        #total-score {
+            color: #fff;
+            font-size: 1.5rem;
+            font-weight: 300;
+            letter-spacing: 5px;
+            opacity: 0.8;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+
+        #start-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease;
+        }
+
+        #start-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #start-title {
+            color: #fff;
+            font-size: 3.5rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 15px;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+            margin-bottom: 40px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        #fullscreen-button {
+            padding: 20px 50px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            color: #fff;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        #fullscreen-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        #fullscreen-button:active {
+            transform: translateY(-1px);
+        }
+
+        #start-instruction {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1rem;
+            margin-top: 30px;
+            letter-spacing: 3px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="start-screen">
+    <div id="start-title">CHAINED GAMES</div>
+    <button id="fullscreen-button">ENTER FULLSCREEN</button>
+    <div id="start-instruction">Click to start the game experience</div>
+</div>
+
+<div id="game-wrapper">
+    <iframe id="pinball-iframe" class="game-iframe"></iframe>
+    <iframe id="snow-iframe" class="game-iframe"></iframe>
+</div>
+
+<div id="transition-overlay">
+    <div id="transition-text">NEXT GAME...</div>
+    <div id="total-score">Total Score: 0</div>
+</div>
+
+<script>
+    // Game timeout configuration (in seconds) - set all timeouts here
+    const GAME_TIMEOUTS = {
+        pinball: 5,
+        snow: 5
+    };
+
+    const games = [
+        { id: 'pinball', iframeId: 'pinball-iframe', file: 'pinball_wizard.html', timeout: GAME_TIMEOUTS.pinball },
+        { id: 'snow', iframeId: 'snow-iframe', file: 'snow_ninja.html', timeout: GAME_TIMEOUTS.snow }
+    ];
+
+    let currentGameIndex = 0;
+    let totalScore = 0;
+    let gameTransitioning = false;
+    let gameScores = {};
+    let gameTimeoutId = null;
+
+    // Listen for game completion messages from iframes
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'gameComplete') {
+            const { game, score } = event.data;
+            gameScores[game] = score;
+            totalScore += score;
+            
+            // Clear timeout and interval since game completed naturally
+            if (gameTimeoutId) {
+                clearTimeout(gameTimeoutId);
+                gameTimeoutId = null;
+            }
+            if (window.gameTimeInterval) {
+                clearInterval(window.gameTimeInterval);
+                window.gameTimeInterval = null;
+            }
+            
+            if (!gameTransitioning) {
+                transitionToNextGame();
+            }
+        }
+    });
+
+    function transitionToNextGame() {
+        if (gameTransitioning) return;
+        gameTransitioning = true;
+
+        const overlay = document.getElementById('transition-overlay');
+        const text = document.getElementById('transition-text');
+        const scoreDisplay = document.getElementById('total-score');
+        
+        overlay.classList.add('show');
+        scoreDisplay.textContent = `Total Score: ${totalScore}`;
+        
+        setTimeout(() => {
+            // Hide and stop current game
+            const currentIframe = document.getElementById(games[currentGameIndex].iframeId);
+            if (currentIframe) {
+                currentIframe.classList.remove('active');
+                currentIframe.src = 'about:blank';
+            }
+            
+            // Clear timeout and interval
+            if (gameTimeoutId) {
+                clearTimeout(gameTimeoutId);
+                gameTimeoutId = null;
+            }
+            if (window.gameTimeInterval) {
+                clearInterval(window.gameTimeInterval);
+                window.gameTimeInterval = null;
+            }
+
+            currentGameIndex++;
+            
+            if (currentGameIndex >= games.length) {
+                // All games completed
+                text.textContent = 'GAME COMPLETE!';
+                scoreDisplay.textContent = `Final Score: ${totalScore}`;
+                
+                setTimeout(() => {
+                    // Reset and restart from beginning
+                    currentGameIndex = 0;
+                    totalScore = 0;
+                    gameScores = {};
+                    
+                    // Reset all iframes to blank to stop games
+                    games.forEach(game => {
+                        const iframe = document.getElementById(game.iframeId);
+                        if (iframe) {
+                            iframe.src = 'about:blank';
+                            iframe.classList.remove('active');
+                        }
+                    });
+                    
+                    text.textContent = 'NEXT GAME...';
+                    scoreDisplay.textContent = `Total Score: 0`;
+                    
+                    setTimeout(() => {
+                        overlay.classList.remove('show');
+                        showGame(games[currentGameIndex]);
+                        gameTransitioning = false;
+                    }, 500);
+                }, 3000);
+                return;
+            }
+
+            text.textContent = 'NEXT GAME...';
+            
+            setTimeout(() => {
+                overlay.classList.remove('show');
+                showGame(games[currentGameIndex]);
+                gameTransitioning = false;
+            }, 1500);
+        }, 1000);
+    }
+
+    function startGameTimeout(game) {
+        // Clear any existing timeout and interval
+        if (gameTimeoutId) {
+            clearTimeout(gameTimeoutId);
+            gameTimeoutId = null;
+        }
+        if (window.gameTimeInterval) {
+            clearInterval(window.gameTimeInterval);
+            window.gameTimeInterval = null;
+        }
+        
+        // Start new timeout for this game
+        if (game.timeout) {
+            let timeLeft = game.timeout;
+            const iframe = document.getElementById(game.iframeId);
+            
+            // Send initial time update
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({ 
+                    type: 'timeUpdate', 
+                    timeLeft: timeLeft, 
+                    totalTime: game.timeout 
+                }, '*');
+            }
+            
+            // Update time every 100ms for smooth animation
+            window.gameTimeInterval = setInterval(() => {
+                timeLeft -= 0.1;
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({ 
+                        type: 'timeUpdate', 
+                        timeLeft: Math.max(0, timeLeft), 
+                        totalTime: game.timeout 
+                    }, '*');
+                }
+                
+                if (timeLeft <= 0) {
+                    clearInterval(window.gameTimeInterval);
+                    window.gameTimeInterval = null;
+                }
+            }, 100);
+            
+            // Set final timeout
+            gameTimeoutId = setTimeout(() => {
+                if (iframe && iframe.contentWindow) {
+                    // Send timeout message to game
+                    iframe.contentWindow.postMessage({ type: 'gameTimeout' }, '*');
+                }
+                if (window.gameTimeInterval) {
+                    clearInterval(window.gameTimeInterval);
+                    window.gameTimeInterval = null;
+                }
+            }, game.timeout * 1000);
+        }
+    }
+
+    function showGame(game) {
+        // Hide all games first and stop them
+        games.forEach(g => {
+            const iframe = document.getElementById(g.iframeId);
+            if (iframe && g.id !== game.id) {
+                iframe.classList.remove('active');
+                // Stop the game by setting to blank
+                iframe.src = 'about:blank';
+            }
+        });
+        
+        // Clear any existing timeout and interval
+        if (gameTimeoutId) {
+            clearTimeout(gameTimeoutId);
+            gameTimeoutId = null;
+        }
+        if (window.gameTimeInterval) {
+            clearInterval(window.gameTimeInterval);
+            window.gameTimeInterval = null;
+        }
+        
+        // Load and show the selected game
+        const iframe = document.getElementById(game.iframeId);
+        if (iframe) {
+            // Always reload to ensure fresh start
+            iframe.src = 'about:blank';
+            
+            // Wait a moment, then load the game
+            setTimeout(() => {
+                iframe.src = game.file;
+                
+                // Wait for iframe to load before showing
+                iframe.onload = () => {
+                    setTimeout(() => {
+                        iframe.classList.add('active');
+                        // Start timeout for this game
+                        startGameTimeout(game);
+                    }, 200);
+                };
+            }, 100);
+        }
+    }
+
+    function requestFullscreen() {
+        if (document.documentElement.requestFullscreen) {
+            return document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+            return document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) {
+            return document.documentElement.msRequestFullscreen();
+        } else if (document.documentElement.mozRequestFullScreen) {
+            return document.documentElement.mozRequestFullScreen();
+        }
+        return Promise.reject('Fullscreen not supported');
+    }
+
+    function isFullscreen() {
+        return !!(document.fullscreenElement || 
+                 document.webkitFullscreenElement || 
+                 document.msFullscreenElement || 
+                 document.mozFullScreenElement);
+    }
+
+    function handleFullscreenChange() {
+        if (isFullscreen()) {
+            // Hide start screen and start first game
+            const startScreen = document.getElementById('start-screen');
+            startScreen.classList.add('hidden');
+            
+            setTimeout(() => {
+                showGame(games[0]);
+            }, 500);
+        }
+    }
+
+    window.addEventListener('load', () => {
+        const fullscreenButton = document.getElementById('fullscreen-button');
+        
+        // Listen for fullscreen changes
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('msfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        
+        // Button click handler
+        fullscreenButton.addEventListener('click', () => {
+            requestFullscreen().catch(err => {
+                console.error('Fullscreen error:', err);
+                // If fullscreen fails, start games anyway
+                handleFullscreenChange();
+            });
+        });
+        
+        // Also allow touch/click anywhere on start screen
+        document.getElementById('start-screen').addEventListener('click', (e) => {
+            if (e.target === fullscreenButton) return;
+            requestFullscreen().catch(() => handleFullscreenChange());
+        });
+    });
+</script>
+
+</body>
+</html>

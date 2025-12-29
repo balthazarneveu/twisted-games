@@ -45,7 +45,7 @@
 
         #game-container {
             position: relative;
-            /* Strict 9:16 Aspect Ratio Enforced */
+            /* Strict 9:16 Aspect Ratio Enforced - but fullscreen when in iframe */
             width: min(100vw, calc(100vh * 9 / 16));
             height: min(100vh, calc(100vw * 16 / 9));
             aspect-ratio: 9 / 16;
@@ -57,10 +57,48 @@
             overflow: hidden;
         }
 
+        /* Fullscreen mode when in iframe - fill entire screen */
+        body.in-iframe #game-container {
+            width: 100vw;
+            height: 100vh;
+            aspect-ratio: auto;
+            border-radius: 0;
+            border: none;
+        }
+        
+        /* Scale canvas to maintain aspect ratio within fullscreen container */
+        body.in-iframe canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(100vw, calc(100vh * 9 / 16)) !important;
+            height: min(100vh, calc(100vw * 16 / 9)) !important;
+        }
+
         canvas {
             display: block;
             width: 100% !important;
             height: 100% !important;
+        }
+
+        #timer-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: rgba(188, 19, 254, 0.3);
+            width: 100%;
+            z-index: 60;
+            overflow: hidden;
+        }
+
+        #timer-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff 0%, #00ffff 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.6);
         }
 
         #ui {
@@ -141,6 +179,9 @@
 
 <div id="game-wrapper">
     <div id="game-container">
+        <div id="timer-bar">
+            <div id="timer-bar-fill"></div>
+        </div>
         <div id="ui">
             <div id="score">000000</div>
         </div>
@@ -184,13 +225,39 @@
     let wizardModeTimer = 0;
     let smashTextTimer = 0;
     let particles = [];
-    let ballHistory = []; 
+    let ballHistory = [];
+    let gameActive = true;
+    let gameTimeout = null; 
 
     function init() {
+        // Reset for chained games and enable fullscreen mode
+        if (window.parent !== window) {
+            document.body.classList.add('in-iframe');
+            
+            // Listen for timeout and time update messages from parent
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'gameTimeout') {
+                    endGame();
+                } else if (event.data && event.data.type === 'timeUpdate') {
+                    updateTimerBar(event.data.timeLeft, event.data.totalTime);
+                }
+            });
+        }
+        
+        gameActive = true;
+        
+        // Initialize timer bar to 100%
+        const timerFill = document.getElementById('timer-bar-fill');
+        if (timerFill) {
+            timerFill.style.width = '100%';
+        }
+        
         engine = Engine.create();
         engine.world.gravity.y = 1.1;
 
         const container = document.getElementById('game-container');
+        const isFullscreen = window.parent !== window;
+        
         render = Render.create({
             element: container,
             engine: engine,
@@ -202,6 +269,8 @@
                 pixelRatio: window.devicePixelRatio || 1
             }
         });
+        
+        // Canvas will be scaled via CSS when in iframe mode
 
         createTable();
         spawnBall();
@@ -413,10 +482,13 @@
         });
 
         Events.on(engine, 'afterUpdate', () => {
-            if (!ball) return;
+            if (!ball || !gameActive) return;
             if (wizardModeTimer > 0) wizardModeTimer--;
             if (smashTextTimer > 0) smashTextTimer--;
-            if (ball.position.y > HEIGHT + 60) { spawnBall(); resetMirror(); }
+            if (ball.position.y > HEIGHT + 60) {
+                spawnBall();
+                resetMirror();
+            }
         });
 
         Events.on(engine, 'collisionStart', (event) => {
@@ -577,6 +649,36 @@
             if (e.code === 'KeyA' || e.code === 'ArrowLeft') handle('left', false);
             if (e.code === 'KeyD' || e.code === 'ArrowRight') handle('right', false);
         });
+    }
+
+    function updateTimerBar(timeLeft, totalTime) {
+        const timerFill = document.getElementById('timer-bar-fill');
+        if (timerFill) {
+            const percentage = (timeLeft / totalTime) * 100;
+            timerFill.style.width = percentage + '%';
+            
+            // Change color when time is running low
+            if (percentage < 20) {
+                timerFill.style.background = 'linear-gradient(90deg, #ff0000 0%, #ff6600 100%)';
+                timerFill.style.boxShadow = '0 0 15px rgba(255, 0, 0, 0.8)';
+            } else if (percentage < 50) {
+                timerFill.style.background = 'linear-gradient(90deg, #ff9800 0%, #ff00ff 100%)';
+                timerFill.style.boxShadow = '0 0 10px rgba(255, 152, 0, 0.6)';
+            } else {
+                timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+                timerFill.style.boxShadow = '0 0 10px rgba(0, 255, 255, 0.6)';
+            }
+        }
+    }
+
+    function endGame() {
+        if (!gameActive) return;
+        gameActive = false;
+        
+        // Notify parent if in iframe
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: 'gameComplete', game: 'pinball', score: score }, '*');
+        }
     }
 
     window.onload = init;

@@ -162,6 +162,7 @@
 
     let score = 0;
     let timeLeft = 30;
+    let totalTime = 30;
     let gameActive = false;
     let showingResult = false;
     let snowflakes = [];
@@ -171,6 +172,7 @@
     let lastTime = 0;
     let spawnTimer = 0;
     let clouds = [];
+    let useParentTimer = false;
 
     const INITIAL_SPAWN_RATE = 350;
     const FINAL_SPAWN_RATE = 40;
@@ -355,6 +357,44 @@
         startMenu.classList.remove('hidden');
         endMenu.classList.add('hidden');
         setTimeout(() => { if(gameActive) startMenu.classList.add('hidden'); }, 3000);
+        
+        // Listen for timeout and time update messages from parent if in iframe
+        if (window.parent !== window && !window.timeoutListenerAdded) {
+            window.timeoutListenerAdded = true;
+            useParentTimer = true;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'gameTimeout') {
+                    if (gameActive) {
+                        timeLeft = 0;
+                        restartSequence();
+                    }
+                } else if (event.data && event.data.type === 'timeUpdate') {
+                    timeLeft = event.data.timeLeft;
+                    totalTime = event.data.totalTime;
+                    updateTimerBar();
+                }
+            });
+        } else {
+            useParentTimer = false;
+        }
+    }
+    
+    function updateTimerBar() {
+        if (!timerLine) return;
+        const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+        timerLine.style.width = Math.max(0, Math.min(100, percentage)) + "%";
+        
+        // Change color when time is running low
+        if (percentage < 20) {
+            timerLine.style.background = "var(--orange)";
+            if (blitzGlow) blitzGlow.style.opacity = (Math.sin(Date.now()*0.01)*0.2 + 0.3);
+        } else if (percentage < 50) {
+            timerLine.style.background = "#ff9800";
+            if (blitzGlow) blitzGlow.style.opacity = "0";
+        } else {
+            timerLine.style.background = "var(--accent)";
+            if (blitzGlow) blitzGlow.style.opacity = "0";
+        }
     }
 
     function restartSequence() {
@@ -363,6 +403,11 @@
         document.getElementById('final-score-val').innerText = score;
         endMenu.classList.remove('hidden');
         blitzGlow.style.opacity = "0";
+        
+        // Notify parent if in iframe
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: 'gameComplete', game: 'snow', score: score }, '*');
+        }
         
         // Déclencher les feux d'artifice périodiquement
         const fwInterval = setInterval(() => {
@@ -373,7 +418,9 @@
         setTimeout(() => {
             clearInterval(fwInterval);
             endMenu.classList.add('hidden');
-            startGame();
+            if (window.parent === window) {
+                startGame();
+            }
         }, 4000);
     }
 
@@ -411,20 +458,25 @@
         gctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
         if (gameActive) {
-            timeLeft -= deltaTime / 1000;
-            if (timeLeft <= 0) { timeLeft = 0; restartSequence(); }
-            timerLine.style.width = (timeLeft / 30 * 100) + "%";
+            // Only use internal timer if not in iframe (standalone mode)
+            if (!useParentTimer) {
+                timeLeft -= deltaTime / 1000;
+                if (timeLeft <= 0) { timeLeft = 0; restartSequence(); }
+                updateTimerBar();
+            } else {
+                // When using parent timer, check if time is up
+                if (timeLeft <= 0) { 
+                    timeLeft = 0; 
+                    restartSequence(); 
+                }
+            }
 
             let rate;
-            if (timeLeft < 7) {
+            if (timeLeft < totalTime * 0.23) { // Last 23% of time
                 rate = FINAL_SPAWN_RATE;
-                blitzGlow.style.opacity = (Math.sin(time*0.01)*0.2 + 0.3);
-                timerLine.style.background = "var(--orange)";
             } else {
-                const p = (30 - timeLeft) / 23;
+                const p = (totalTime - timeLeft) / (totalTime * 0.77);
                 rate = INITIAL_SPAWN_RATE - (p * (INITIAL_SPAWN_RATE - 100));
-                blitzGlow.style.opacity = "0";
-                timerLine.style.background = "var(--accent)";
             }
 
             spawnTimer += deltaTime;
