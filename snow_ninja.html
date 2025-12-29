@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Snow Ninja - Minimalist Fireworks</title>
+    <style>
+        :root {
+            --gold: #ffd700;
+            --orange: #ff9800;
+            --ice: #e0f7fa;
+            --night: #020c1b;
+            --accent: #4cc9f0;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--night);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #020c1b 0%, #0a2a5a 100%);
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: 20px;
+            right: 20px;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .stat-box {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+            color: white;
+            font-weight: 300;
+            font-size: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #timer-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: var(--accent);
+            width: 100%;
+            transition: width 0.1s linear;
+            z-index: 60;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            z-index: 100;
+            width: 100%;
+            pointer-events: none;
+            transition: opacity 0.8s ease;
+        }
+
+        .overlay h1 {
+            font-size: 3rem;
+            font-weight: 200;
+            letter-spacing: 10px;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .overlay p {
+            font-size: 1rem;
+            opacity: 0.6;
+            letter-spacing: 3px;
+            margin-top: 10px;
+        }
+
+        #blitz-glow {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 40;
+            opacity: 0;
+            box-shadow: inset 0 0 150px var(--orange);
+            transition: opacity 1s;
+        }
+
+        .floating-text {
+            position: absolute;
+            font-weight: 900;
+            pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-40px); opacity: 0; }
+        }
+
+        .hidden { opacity: 0 !important; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="timer-line"></div>
+    <div id="blitz-glow"></div>
+    
+    <div id="ui-layer">
+        <div class="stat-box" id="score-display">0</div>
+    </div>
+
+    <canvas id="bgCanvas"></canvas>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="start-menu" class="overlay">
+        <h1>SNOW NINJA</h1>
+        <p>Préparez-vous...</p>
+    </div>
+
+    <div id="end-menu" class="overlay hidden">
+        <p>SCORE FINAL</p>
+        <h1 id="final-score-val">0</h1>
+    </div>
+</div>
+
+<script>
+    const gameCanvas = document.getElementById('gameCanvas');
+    const bgCanvas = document.getElementById('bgCanvas');
+    const gctx = gameCanvas.getContext('2d');
+    const bctx = bgCanvas.getContext('2d');
+    
+    const startMenu = document.getElementById('start-menu');
+    const endMenu = document.getElementById('end-menu');
+    const scoreDisplay = document.getElementById('score-display');
+    const timerLine = document.getElementById('timer-line');
+    const blitzGlow = document.getElementById('blitz-glow');
+
+    let score = 0;
+    let timeLeft = 30;
+    let gameActive = false;
+    let showingResult = false;
+    let snowflakes = [];
+    let particles = [];
+    let fireworks = [];
+    let trail = [];
+    let lastTime = 0;
+    let spawnTimer = 0;
+    let clouds = [];
+
+    const INITIAL_SPAWN_RATE = 350;
+    const FINAL_SPAWN_RATE = 40;
+    const SPEED_SCALE = 0.7;
+
+    function resize() {
+        gameCanvas.width = bgCanvas.width = window.innerWidth;
+        gameCanvas.height = bgCanvas.height = window.innerHeight;
+        initClouds();
+    }
+    window.addEventListener('resize', resize);
+
+    function initClouds() {
+        clouds = [];
+        for(let i=0; i<6; i++) {
+            clouds.push({
+                x: Math.random() * bgCanvas.width,
+                y: Math.random() * bgCanvas.height * 0.45,
+                w: 80 + Math.random() * 160,
+                speed: 0.15 + Math.random() * 0.3
+            });
+        }
+    }
+
+    function drawBackground() {
+        bctx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+        
+        // Ciel profond
+        const skyGrad = bctx.createLinearGradient(0,0,0, bgCanvas.height);
+        skyGrad.addColorStop(0, '#020c1b');
+        skyGrad.addColorStop(1, '#0a2a5a');
+        bctx.fillStyle = skyGrad;
+        bctx.fillRect(0,0, bgCanvas.width, bgCanvas.height);
+
+        // Nuages épurés
+        bctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+        clouds.forEach(c => {
+            c.x += c.speed;
+            if (c.x > bgCanvas.width + c.w) c.x = -c.w;
+            bctx.beginPath();
+            bctx.ellipse(c.x, c.y, c.w, c.w/2.5, 0, 0, Math.PI*2);
+            bctx.fill();
+        });
+
+        // Montagnes lointaines
+        bctx.fillStyle = "#031124";
+        bctx.beginPath();
+        bctx.moveTo(0, bgCanvas.height);
+        bctx.lineTo(bgCanvas.width * 0.25, bgCanvas.height - 150);
+        bctx.lineTo(bgCanvas.width * 0.6, bgCanvas.height);
+        bctx.fill();
+
+        // Montagnes intermédiaires
+        bctx.fillStyle = "#051631";
+        bctx.beginPath();
+        bctx.moveTo(bgCanvas.width * 0.3, bgCanvas.height);
+        bctx.lineTo(bgCanvas.width * 0.65, bgCanvas.height - 200);
+        bctx.lineTo(bgCanvas.width * 0.9, bgCanvas.height);
+        bctx.fill();
+
+        // Montagne principale
+        bctx.fillStyle = "#071e3d";
+        bctx.beginPath();
+        bctx.moveTo(bgCanvas.width * 0.5, bgCanvas.height);
+        bctx.lineTo(bgCanvas.width * 0.85, bgCanvas.height - 280);
+        bctx.lineTo(bgCanvas.width * 1.2, bgCanvas.height);
+        bctx.fill();
+    }
+
+    class Firework {
+        constructor() {
+            this.x = Math.random() * gameCanvas.width;
+            this.y = Math.random() * gameCanvas.height * 0.6;
+            this.particles = [];
+            const hue = Math.random() * 360;
+            const count = 40;
+            for(let i=0; i<count; i++) {
+                const angle = (i / count) * Math.PI * 2;
+                const speed = 2 + Math.random() * 4;
+                this.particles.push({
+                    x: this.x, y: this.y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    alpha: 1,
+                    hue: hue
+                });
+            }
+        }
+        update() {
+            this.particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                p.vy += 0.05;
+                p.alpha -= 0.015;
+            });
+            this.particles = this.particles.filter(p => p.alpha > 0);
+        }
+        draw() {
+            this.particles.forEach(p => {
+                gctx.globalAlpha = p.alpha;
+                gctx.fillStyle = `hsla(${p.hue}, 80%, 60%, ${p.alpha})`;
+                gctx.beginPath(); gctx.arc(p.x, p.y, 2, 0, Math.PI*2); gctx.fill();
+            });
+            gctx.globalAlpha = 1;
+        }
+    }
+
+    class Snowflake {
+        constructor(isGolden = false) {
+            this.isGolden = isGolden;
+            this.hasEntered = false;
+            this.reset();
+        }
+        reset() {
+            this.radius = this.isGolden ? 12 : Math.random()*8+16;
+            this.hasEntered = false;
+            if (this.isGolden) {
+                this.x = Math.random() * (gameCanvas.width - 60) + 30;
+                this.y = gameCanvas.height + this.radius;
+                this.vx = (Math.random() - 0.5);
+                this.vy = -(2.5 + Math.random()*2) * SPEED_SCALE;
+            } else {
+                const isSide = Math.random() > 0.6;
+                if (!isSide) {
+                    this.x = Math.random() * (gameCanvas.width - 40) + 20;
+                    this.y = -this.radius * 2;
+                    this.vx = (Math.random() - 0.5);
+                    this.vy = (2.5 + Math.random()*2.5) * SPEED_SCALE;
+                } else {
+                    const isLeft = Math.random() < 0.5;
+                    this.x = isLeft ? -this.radius : gameCanvas.width + this.radius;
+                    this.y = Math.random() * (gameCanvas.height * 0.5);
+                    this.vx = (isLeft ? (3 + Math.random()*3) : (-3 - Math.random()*3)) * SPEED_SCALE;
+                    this.vy = (1.5 + Math.random()*1.5) * SPEED_SCALE;
+                }
+            }
+            this.rotation = 0;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.05;
+        }
+        update() {
+            this.x += this.vx; this.y += this.vy; this.rotation += this.rotationSpeed;
+            if (!this.hasEntered && this.x > 0 && this.x < gameCanvas.width && this.y > 0 && this.y < gameCanvas.height) {
+                this.hasEntered = true;
+            }
+            const out = this.y - this.radius > gameCanvas.height || this.y + this.radius < -50 || this.x < -100 || this.x > gameCanvas.width + 100;
+            if (out) {
+                if (gameActive && this.hasEntered && !this.isGolden) {
+                    score = Math.max(0, score - 2);
+                    scoreDisplay.innerText = score;
+                    createFloatingText(Math.min(gameCanvas.width-20, Math.max(20, this.x)), Math.min(gameCanvas.height-20, Math.max(20, this.y)), "-2", "#ff4d4d");
+                }
+                this.reset();
+            }
+        }
+        draw() {
+            gctx.save();
+            gctx.translate(this.x, this.y);
+            gctx.rotate(this.rotation);
+            gctx.strokeStyle = this.isGolden ? "var(--gold)" : "rgba(255, 255, 255, 0.8)";
+            if(this.isGolden) { gctx.shadowBlur = 10; gctx.shadowColor = "gold"; }
+            gctx.lineWidth = this.isGolden ? 3 : 2;
+            for(let i=0; i<6; i++) {
+                gctx.beginPath(); gctx.moveTo(0,0); gctx.lineTo(0, this.radius);
+                gctx.stroke(); gctx.rotate(Math.PI/3);
+            }
+            gctx.restore();
+        }
+    }
+
+    function createFloatingText(x, y, text, color) {
+        const div = document.createElement('div');
+        div.className = 'floating-text';
+        div.innerText = text;
+        div.style.left = x + 'px'; div.style.top = y + 'px'; div.style.color = color;
+        document.body.appendChild(div);
+        setTimeout(() => div.remove(), 800);
+    }
+
+    function startGame() {
+        score = 0; timeLeft = 30; snowflakes = []; particles = []; fireworks = [];
+        gameActive = true; showingResult = false;
+        scoreDisplay.innerText = "0";
+        startMenu.classList.remove('hidden');
+        endMenu.classList.add('hidden');
+        setTimeout(() => { if(gameActive) startMenu.classList.add('hidden'); }, 3000);
+    }
+
+    function restartSequence() {
+        gameActive = false;
+        showingResult = true;
+        document.getElementById('final-score-val').innerText = score;
+        endMenu.classList.remove('hidden');
+        blitzGlow.style.opacity = "0";
+        
+        // Déclencher les feux d'artifice périodiquement
+        const fwInterval = setInterval(() => {
+            if(showingResult) fireworks.push(new Firework());
+            else clearInterval(fwInterval);
+        }, 400);
+
+        setTimeout(() => {
+            clearInterval(fwInterval);
+            endMenu.classList.add('hidden');
+            startGame();
+        }, 4000);
+    }
+
+    function handleInput(x, y) {
+        if (!gameActive) return;
+        trail.push({ x, y, alpha: 1 });
+        for (let i = snowflakes.length - 1; i >= 0; i--) {
+            const s = snowflakes[i];
+            if (Math.hypot(x - s.x, y - s.y) < s.radius + 30) {
+                const color = s.isGolden ? "var(--gold)" : "white";
+                score += s.isGolden ? 5 : 1;
+                scoreDisplay.innerText = score;
+                if(s.isGolden) createFloatingText(s.x, s.y, "+5", "var(--gold)");
+                for(let p=0; p<12; p++) {
+                    particles.push({
+                        x: s.x, y: s.y,
+                        vx: (Math.random()-0.5)*7, vy: (Math.random()-0.5)*7,
+                        alpha: 1, color: color
+                    });
+                }
+                snowflakes.splice(i, 1);
+            }
+        }
+    }
+
+    gameCanvas.addEventListener('mousemove', (e) => { if (e.buttons === 1) handleInput(e.clientX, e.clientY); });
+    gameCanvas.addEventListener('touchstart', (e) => handleInput(e.touches[0].clientX, e.touches[0].clientY));
+    gameCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleInput(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+
+    function animate(time) {
+        const deltaTime = time - lastTime;
+        lastTime = time;
+
+        drawBackground();
+        gctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+        if (gameActive) {
+            timeLeft -= deltaTime / 1000;
+            if (timeLeft <= 0) { timeLeft = 0; restartSequence(); }
+            timerLine.style.width = (timeLeft / 30 * 100) + "%";
+
+            let rate;
+            if (timeLeft < 7) {
+                rate = FINAL_SPAWN_RATE;
+                blitzGlow.style.opacity = (Math.sin(time*0.01)*0.2 + 0.3);
+                timerLine.style.background = "var(--orange)";
+            } else {
+                const p = (30 - timeLeft) / 23;
+                rate = INITIAL_SPAWN_RATE - (p * (INITIAL_SPAWN_RATE - 100));
+                blitzGlow.style.opacity = "0";
+                timerLine.style.background = "var(--accent)";
+            }
+
+            spawnTimer += deltaTime;
+            if (spawnTimer > rate) {
+                snowflakes.push(new Snowflake(Math.random() < 0.09));
+                spawnTimer = 0;
+            }
+        }
+
+        if (showingResult) {
+            fireworks.forEach((fw, i) => {
+                fw.update(); fw.draw();
+                if(fw.particles.length === 0) fireworks.splice(i, 1);
+            });
+        }
+
+        snowflakes.forEach(s => { s.update(); s.draw(); });
+        particles.forEach((p, i) => {
+            p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.alpha -= 0.025;
+            gctx.globalAlpha = p.alpha; gctx.fillStyle = p.color;
+            gctx.beginPath(); gctx.arc(p.x, p.y, 2, 0, Math.PI*2); gctx.fill();
+            if(p.alpha <= 0) particles.splice(i, 1);
+        });
+        gctx.globalAlpha = 1;
+
+        if (trail.length > 1) {
+            gctx.beginPath();
+            gctx.strokeStyle = "rgba(255,255,255,0.4)";
+            gctx.lineWidth = 2;
+            gctx.moveTo(trail[0].x, trail[0].y);
+            for(let i=1; i<trail.length; i++) gctx.lineTo(trail[i].x, trail[i].y);
+            gctx.stroke();
+        }
+        for(let i=trail.length-1; i>=0; i--) { trail[i].alpha -= 0.1; if(trail[i].alpha <= 0) trail.splice(i,1); }
+
+        requestAnimationFrame(animate);
+    }
+
+    resize();
+    startGame();
+    requestAnimationFrame(animate);
+</script>
+</body>
+</html>
