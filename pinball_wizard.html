@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Harmony Pinball Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        :root {
+            --neon-pink: #ff00ff;
+            --neon-blue: #00ffff;
+            --neon-purple: #bc13fe;
+            --bg-dark: #050510;
+        }
+
+        * {
+            box-sizing: border-box;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+
+        #game-container {
+            position: relative;
+            /* Strict 9:16 Aspect Ratio Enforced */
+            width: min(100vw, calc(100vh * 9 / 16));
+            height: min(100vh, calc(100vw * 16 / 9));
+            aspect-ratio: 9 / 16;
+            background: radial-gradient(circle at center, #0e0e2e 0%, #000 100%);
+            border: 3px solid var(--neon-purple);
+            /* Perfect 225px radius for 450px width creates a half-circle top */
+            border-radius: 225px 225px 40px 40px;
+            box-shadow: 0 0 40px rgba(188, 19, 254, 0.4);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        #ui {
+            position: absolute;
+            bottom: 5px;
+            width: 100%;
+            pointer-events: none;
+            text-align: center;
+            z-index: 50;
+        }
+
+        #score {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--neon-blue);
+            text-shadow: 0 0 5px var(--neon-blue);
+            letter-spacing: 3px;
+            opacity: 0.6;
+        }
+
+        #hint-buttons {
+            position: absolute;
+            bottom: 12px;
+            width: 100%;
+            padding: 0 25px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 15;
+        }
+
+        .hint-btn {
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--neon-blue);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--neon-blue);
+            font-weight: bold;
+            font-size: 14px;
+            opacity: 0.5;
+            background: rgba(0, 255, 255, 0.05);
+            transition: all 0.1s;
+        }
+
+        .hint-btn.active {
+            opacity: 1;
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-blue);
+            transform: scale(0.9);
+        }
+
+        .hint-btn.pink {
+            border-color: var(--neon-pink);
+            color: var(--neon-pink);
+        }
+
+        .hint-btn.pink.active {
+            background: var(--neon-pink);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-pink);
+        }
+
+        .touch-zone {
+            position: absolute;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="game-container">
+        <div id="ui">
+            <div id="score">000000</div>
+        </div>
+        <div id="hint-buttons">
+            <div id="hint-l" class="hint-btn pink">L</div>
+            <div id="hint-r" class="hint-btn">R</div>
+        </div>
+        <div id="left-zone" class="touch-zone"></div>
+        <div id="right-zone" class="touch-zone"></div>
+    </div>
+</div>
+
+<script>
+    const { Engine, Render, Runner, World, Bodies, Body, Events, Constraint, Composite, Vector } = Matter;
+
+    const WIDTH = 450;
+    const HEIGHT = 800;
+    const BALL_RADIUS = 12;
+    const FLIPPER_LENGTH = 110;
+    const BUMPER_RADIUS = 35;
+    
+    const OFFSET_Y = -80; 
+    const PIVOT_Y = 740 + OFFSET_Y;
+    
+    const DOME_X = WIDTH / 2;
+    const DOME_Y = 280 + OFFSET_Y; 
+    const MIRROR_RADIUS = 190;
+
+    let engine, render, runner, ball;
+    let leftFlipper, rightFlipper;
+    let bumpers = [];
+    let score = 0;
+    let time = 0;
+    
+    let mirrorHealth = 3;
+    let mirrorBroken = false;
+    let mirrorSegments = [];
+    let mirrorCracks = []; 
+    let mirrorFlash = 0;
+
+    let wizardModeTimer = 0;
+    let smashTextTimer = 0;
+    let particles = [];
+    let ballHistory = []; 
+
+    function init() {
+        engine = Engine.create();
+        engine.world.gravity.y = 1.1;
+
+        const container = document.getElementById('game-container');
+        render = Render.create({
+            element: container,
+            engine: engine,
+            options: {
+                width: WIDTH,
+                height: HEIGHT,
+                wireframes: false,
+                background: 'transparent',
+                pixelRatio: window.devicePixelRatio || 1
+            }
+        });
+
+        createTable();
+        spawnBall();
+        setupControls();
+
+        Events.on(render, 'afterRender', () => {
+            const ctx = render.context;
+            time += 0.02;
+
+            // Background Geometric Style Lines
+            ctx.save();
+            ctx.strokeStyle = 'rgba(188, 19, 254, 0.15)';
+            ctx.lineWidth = 1;
+            for(let i=-3; i<=7; i++) {
+                ctx.beginPath();
+                ctx.moveTo(WIDTH/2 + (i * 70), 0);
+                ctx.lineTo(WIDTH/2 + (i * 140), HEIGHT);
+                ctx.stroke();
+            }
+            for(let j=0; j<8; j++) {
+                const yPos = ((time * 150 + j * 100) % HEIGHT);
+                ctx.globalAlpha = 0.15 * (yPos / HEIGHT);
+                ctx.beginPath();
+                ctx.moveTo(0, yPos);
+                ctx.lineTo(WIDTH, yPos);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // Orbitals
+            ctx.save();
+            ctx.globalAlpha = 0.08;
+            ctx.strokeStyle = '#bc13fe';
+            ctx.beginPath();
+            for(let i=0; i<Math.PI*2; i+=0.1) {
+                const x = WIDTH/2 + Math.sin(3 * i + time) * 120;
+                const y = HEIGHT/2 + Math.cos(2 * i + time * 0.4) * 160;
+                if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.restore();
+
+            // Top Math Shape
+            ctx.save();
+            ctx.globalAlpha = 0.3;
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#ff00ff';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff00ff';
+            ctx.beginPath();
+            const rX = WIDTH / 2, rY = 115;
+            for(let i=0; i < Math.PI * 2; i += 0.05) {
+                const r = 55 * Math.cos(4 * (i + time * 0.5));
+                const x = rX + r * Math.cos(i);
+                const y = rY + r * Math.sin(i);
+                if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.closePath(); ctx.stroke(); ctx.restore();
+
+            // Bottom Flower of Life
+            ctx.save();
+            ctx.globalAlpha = 0.2;
+            ctx.lineWidth = 1.2;
+            ctx.strokeStyle = '#00ffff';
+            ctx.shadowBlur = 8;
+            const folX = WIDTH / 2, folY = PIVOT_Y - 140;
+            for(let i=0; i<6; i++) {
+                const angle = i * Math.PI / 3 + time * 0.3;
+                ctx.beginPath();
+                ctx.arc(folX + Math.cos(angle)*25, folY + Math.sin(angle)*25, 25, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            ctx.beginPath(); ctx.arc(folX, folY, 25, 0, Math.PI*2); ctx.stroke(); ctx.restore();
+
+            // Mirror Glass Look
+            if (!mirrorBroken) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(DOME_X, DOME_Y, MIRROR_RADIUS, Math.PI, 0);
+                ctx.lineTo(DOME_X + MIRROR_RADIUS, DOME_Y);
+                ctx.lineTo(DOME_X - MIRROR_RADIUS, DOME_Y);
+                ctx.closePath();
+                
+                const gGrad = ctx.createRadialGradient(DOME_X, DOME_Y - 40, 0, DOME_X, DOME_Y, MIRROR_RADIUS);
+                gGrad.addColorStop(0, 'rgba(120, 220, 255, 0.2)');
+                gGrad.addColorStop(0.8, 'rgba(40, 80, 255, 0.1)');
+                gGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
+                ctx.fillStyle = gGrad; ctx.fill();
+
+                ctx.save();
+                ctx.clip();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.shadowBlur = 3; ctx.shadowColor = '#fff';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                mirrorCracks.forEach(path => {
+                    ctx.moveTo(path[0].x, path[0].y);
+                    for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+                });
+                ctx.stroke();
+                
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.lineWidth = 3; ctx.beginPath();
+                ctx.arc(DOME_X, DOME_Y, MIRROR_RADIUS - 10, Math.PI * 1.15, Math.PI * 1.35);
+                ctx.stroke();
+                ctx.restore();
+
+                const gLevel = 4 + (mirrorHealth * 6); 
+                ctx.shadowBlur = 20 + (mirrorFlash * 25);
+                ctx.shadowColor = mirrorFlash > 0 ? '#ff00ff' : '#00ffff';
+                ctx.strokeStyle = mirrorFlash > 0 ? '#ff00ff' : '#ffffff';
+                ctx.lineWidth = gLevel;
+                ctx.beginPath();
+                ctx.arc(DOME_X, DOME_Y, MIRROR_RADIUS, Math.PI, 0);
+                ctx.lineTo(DOME_X - MIRROR_RADIUS, DOME_Y);
+                ctx.closePath(); ctx.stroke(); ctx.restore();
+            }
+
+            // Ball Trail
+            if (ball) {
+                ballHistory.push({ x: ball.position.x, y: ball.position.y });
+                if (ballHistory.length > 15) ballHistory.shift();
+                ctx.save(); ctx.lineWidth = 6; ctx.lineCap = 'round';
+                ctx.shadowBlur = 12; ctx.shadowColor = '#00ffff';
+                for (let i = 0; i < ballHistory.length - 1; i++) {
+                    const a = (i / ballHistory.length) * 0.5;
+                    ctx.strokeStyle = `rgba(0, 255, 255, ${a})`;
+                    ctx.beginPath(); ctx.moveTo(ballHistory[i].x, ballHistory[i].y);
+                    ctx.lineTo(ballHistory[i+1].x, ballHistory[i+1].y); ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // Particles
+            ctx.save();
+            particles.forEach((p, index) => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+                if (p.life <= 0) particles.splice(index, 1);
+                else {
+                    ctx.fillStyle = p.color; ctx.globalAlpha = p.life; ctx.shadowBlur = 10; ctx.shadowColor = p.color;
+                    ctx.beginPath();
+                    if (p.star) {
+                        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation || 0);
+                        ctx.beginPath();
+                        for (let i = 0; i < 5; i++) {
+                            ctx.lineTo(Math.cos((i * 2 * Math.PI) / 5) * (p.size * 2), Math.sin((i * 2 * Math.PI) / 5) * (p.size * 2));
+                            ctx.lineTo(Math.cos(((i + 0.5) * 2 * Math.PI) / 5) * p.size, Math.sin(((i + 0.5) * 2 * Math.PI) / 5) * p.size);
+                        }
+                        ctx.closePath(); ctx.fill(); ctx.restore(); p.rotation += 0.12;
+                    } else { ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+                }
+            });
+            ctx.restore();
+
+            // Bumpers
+            bumpers.forEach(b => {
+                const { x, y } = b.position;
+                b.hitEffect = b.hitEffect || 0; b.hitEffect *= 0.92;
+                ctx.save();
+                if (b.label === 'crown-bumper') {
+                    const r = b.radius + (b.hitEffect * 30);
+                    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.shadowBlur = 35 + (b.hitEffect * 70); ctx.shadowColor = '#ffff00';
+                    ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 5 + (b.hitEffect * 12); ctx.stroke();
+                } else if (b.label.includes('music-bumper')) {
+                    const r = b.radius + (b.hitEffect * 15);
+                    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.shadowBlur = 18 + (b.hitEffect * 35); ctx.shadowColor = b.render.glow;
+                    ctx.strokeStyle = b.render.glow; ctx.lineWidth = 3 + (b.hitEffect * 6); ctx.stroke();
+                } else if (b.label === 'side-bumper') {
+                    const w = 2 + (b.hitEffect * 10);
+                    ctx.lineWidth = w; ctx.shadowBlur = 15 + (b.hitEffect * 35);
+                    ctx.shadowColor = b.render.glow; ctx.strokeStyle = b.render.glow;
+                    ctx.beginPath(); ctx.moveTo(x, y - 60); ctx.lineTo(x, y + 60); ctx.stroke();
+                }
+                if (b.emoji) {
+                    ctx.shadowBlur = 0; const fSize = b.label === 'crown-bumper' ? 24 : 26;
+                    ctx.font = `bold ${fSize + (b.hitEffect * 18)}px Arial`;
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillStyle = "#fff"; ctx.fillText(b.emoji, x, y);
+                }
+                ctx.restore();
+            });
+
+            // Ball
+            if (ball) {
+                ctx.save(); ctx.beginPath(); ctx.arc(ball.position.x, ball.position.y, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.shadowBlur = 20; ctx.shadowColor = "#fff"; ctx.fillStyle = "#fff"; ctx.fill(); ctx.restore();
+            }
+
+            // Foreground Text
+            ctx.save(); ctx.textAlign = 'center';
+            if (wizardModeTimer > 0) {
+                const a = Math.min(1.0, wizardModeTimer / 30);
+                const s = 1.0 + Math.sin(time * 18) * 0.12;
+                ctx.globalAlpha = a; ctx.fillStyle = '#ff00ff'; ctx.font = `bold ${34 * s}px Arial`;
+                ctx.shadowBlur = 30; ctx.shadowColor = '#ff00ff'; ctx.fillText('PINBALL WIZARD', WIDTH / 2, 85);
+            }
+            if (smashTextTimer > 0) {
+                const a = Math.min(1.0, smashTextTimer / 25);
+                ctx.globalAlpha = a; ctx.fillStyle = '#00ffff'; ctx.font = `bold 28px Arial`;
+                ctx.shadowBlur = 25; ctx.shadowColor = '#00ffff'; ctx.fillText('SMASH THE MIRROR!', WIDTH / 2, DOME_Y + 120);
+            }
+            ctx.restore();
+        });
+
+        Events.on(engine, 'beforeUpdate', () => {
+            updateFlipper(leftFlipper); updateFlipper(rightFlipper);
+        });
+
+        Events.on(engine, 'afterUpdate', () => {
+            if (!ball) return;
+            if (wizardModeTimer > 0) wizardModeTimer--;
+            if (smashTextTimer > 0) smashTextTimer--;
+            if (ball.position.y > HEIGHT + 60) { spawnBall(); resetMirror(); }
+        });
+
+        Events.on(engine, 'collisionStart', (event) => {
+            event.pairs.forEach(pair => {
+                const b = pair.bodyA.label.includes('bumper') ? pair.bodyA : (pair.bodyB.label.includes('bumper') ? pair.bodyB : null);
+                if (b) {
+                    score += 500; document.getElementById('score').innerText = score.toString().padStart(6, '0');
+                    b.hitEffect = 1.0; 
+                    if (b.label === 'crown-bumper') { wizardModeTimer = 180; spawnWizardParticles(b.position.x, b.position.y); }
+                    else spawnParticles(ball.position.x, ball.position.y, b.render.glow);
+                }
+                const m = (pair.bodyA.label === 'mirror-seg' || pair.bodyA.label === 'mirror-bottom') ? pair.bodyA : 
+                          ((pair.bodyB.label === 'mirror-seg' || pair.bodyB.label === 'mirror-bottom') ? pair.bodyB : null);
+                if (m && !mirrorBroken) {
+                    mirrorHealth--; mirrorFlash = 1.0; score += 1500; smashTextTimer = 80; generateCracks(ball.position.x, ball.position.y);
+                    document.getElementById('score').innerText = score.toString().padStart(6, '0');
+                    if (mirrorHealth <= 0) shatterMirror(); else spawnParticles(ball.position.x, ball.position.y, '#00ffff');
+                }
+            });
+        });
+
+        runner = Runner.create(); Runner.run(runner, engine); Render.run(render);
+    }
+
+    function generateCracks(x, y) {
+        for(let i=0; i<6; i++) {
+            const path = []; let cx = x, cy = y;
+            const bAngle = Math.random() * Math.PI * 2;
+            path.push({x: cx, y: cy});
+            for(let j=0; j<5; j++) {
+                cx += Math.cos(bAngle + (Math.random()-0.5) * 1.8) * 28;
+                cy += Math.sin(bAngle + (Math.random()-0.5) * 1.8) * 28;
+                path.push({x: cx, y: cy});
+            }
+            mirrorCracks.push(path);
+        }
+    }
+
+    function spawnParticles(x, y, color) {
+        for (let i = 0; i < 15; i++) {
+            particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10, size: Math.random() * 4 + 1, life: 1.0, color: color || '#fff' });
+        }
+    }
+
+    function spawnWizardParticles(x, y) {
+        for (let i = 0; i < 45; i++) {
+            particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 22, vy: (Math.random() - 0.5) * 22, size: Math.random() * 6 + 4, life: 1.6, color: '#ffff00', star: true, rotation: Math.random() * Math.PI });
+        }
+    }
+
+    function shatterMirror() {
+        mirrorBroken = true; mirrorSegments.forEach(seg => World.remove(engine.world, seg));
+        mirrorSegments = []; mirrorCracks = []; score += 30000;
+        document.getElementById('score').innerText = score.toString().padStart(6, '0');
+        for (let i = 0; i < 80; i++) {
+            const angle = Math.PI + Math.random() * Math.PI;
+            particles.push({ x: DOME_X + Math.cos(angle) * (Math.random() * MIRROR_RADIUS), y: DOME_Y + Math.sin(angle) * (Math.random() * MIRROR_RADIUS), vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 15 + 2, size: Math.random() * 10 + 4, life: 2.8, color: 'rgba(0, 255, 255, 0.8)', shard: true, rotation: Math.random() * Math.PI });
+        }
+    }
+
+    function resetMirror() {
+        mirrorBroken = false; mirrorHealth = 3; wizardModeTimer = 0; smashTextTimer = 0; mirrorCracks = [];
+        mirrorSegments.forEach(seg => World.remove(engine.world, seg));
+        mirrorSegments = [];
+        for (let i = 0; i <= 24; i++) {
+            const angle = Math.PI + (Math.PI / 24) * i;
+            const sx = DOME_X + Math.cos(angle) * MIRROR_RADIUS;
+            const sy = DOME_Y + Math.sin(angle) * MIRROR_RADIUS;
+            const seg = Bodies.rectangle(sx, sy, 30, 25, { isStatic: true, angle: angle + Math.PI/2, label: 'mirror-seg', restitution: 1.15, friction: 0, render: { visible: false } });
+            mirrorSegments.push(seg);
+        }
+        const mirrorBottom = Bodies.rectangle(DOME_X, DOME_Y, MIRROR_RADIUS * 2 + 15, 20, { isStatic: true, label: 'mirror-bottom', restitution: 1.25, friction: 0, render: { visible: false } });
+        mirrorSegments.push(mirrorBottom);
+        World.add(engine.world, mirrorSegments);
+    }
+
+    function createTable() {
+        const wallOpt = { isStatic: true, friction: 0, restitution: 0.5, render: { fillStyle: '#111126' } };
+        const walls = [
+            Bodies.rectangle(10, HEIGHT/2, 20, HEIGHT, wallOpt),
+            Bodies.rectangle(WIDTH - 10, HEIGHT/2, 20, HEIGHT, wallOpt),
+        ];
+        // Perfect Physics Half-Circle Top
+        const pRadius = 225;
+        for (let i = 0; i <= 40; i++) {
+            const angle = Math.PI + (Math.PI / 40) * i;
+            const bx = WIDTH / 2 + Math.cos(angle) * pRadius;
+            const by = pRadius + Math.sin(angle) * pRadius; 
+            walls.push(Bodies.circle(bx, by, 15, { isStatic: true, friction: 0, render: wallOpt.render }));
+        }
+
+        const lSlope = Bodies.rectangle(50, PIVOT_Y - 45, 160, 24, { isStatic: true, angle: 0.55, chamfer: { radius: 10 }, render: wallOpt.render });
+        const rSlope = Bodies.rectangle(WIDTH - 50, PIVOT_Y - 45, 160, 24, { isStatic: true, angle: -0.55, chamfer: { radius: 10 }, render: wallOpt.render });
+
+        bumpers = [
+            createBumper(110, 480 + OFFSET_Y, '🎸', '#ff00ff'),
+            createBumper(340, 480 + OFFSET_Y, '🎸', '#ff00ff'),
+            createBumper(90, 620 + OFFSET_Y, '🎵', '#ffff00', 24),
+            createBumper(360, 620 + OFFSET_Y, '🎵', '#ffff00', 24),
+            createBumper(WIDTH / 2, 110, '🧙🏻‍♂️', '#ffff00', BUMPER_RADIUS - 5, 'crown-bumper'),
+            createBumper(WIDTH / 2 - 100, 130, '🥁', '#00ffff', 22, 'music-bumper'),
+            createBumper(WIDTH / 2 + 100, 130, '🔊', '#ff00ff', 22, 'music-bumper')
+        ];
+
+        resetMirror();
+
+        const sBL = Bodies.rectangle(20, 520 + OFFSET_Y, 4, 120, { isStatic: true, label: 'side-bumper', restitution: 2.2, render: { visible: false, glow: '#00ffff' } });
+        const sBR = Bodies.rectangle(WIDTH - 20, 520 + OFFSET_Y, 4, 120, { isStatic: true, label: 'side-bumper', restitution: 2.2, render: { visible: false, glow: '#ff00ff' } });
+        bumpers.push(sBL, sBR);
+
+        leftFlipper = createFlipper(120, PIVOT_Y, 'left');
+        rightFlipper = createFlipper(WIDTH - 120, PIVOT_Y, 'right');
+        World.add(engine.world, [...walls, lSlope, rSlope, ...bumpers]);
+    }
+
+    function createBumper(x, y, emoji, glow, radius = BUMPER_RADIUS, label = 'music-bumper') {
+        const b = Bodies.circle(x, y, radius, { isStatic: true, label: label, emoji: emoji, restitution: 1.6, render: { visible: false, glow: glow } });
+        b.radius = radius; b.hitEffect = 0; return b;
+    }
+
+    function createFlipper(x, y, side) {
+        const isLeft = side === 'left'; const group = Body.nextGroup(true);
+        const flipper = Bodies.rectangle(x + (isLeft ? 45 : -45), y, FLIPPER_LENGTH, 30, {
+            collisionFilter: { group: group }, chamfer: { radius: 15 }, density: 0.5, render: { fillStyle: isLeft ? '#ff00ff' : '#00ffff' }
+        });
+        const pivot = Bodies.circle(x, y, 6, { isStatic: true, collisionFilter: { group: group }, render: { visible: false } });
+        const joint = Constraint.create({ bodyA: flipper, pointA: { x: isLeft ? -45 : 45, y: 0 }, bodyB: pivot, pointB: { x: 0, y: 0 }, stiffness: 1, length: 0, render: { visible: false } });
+        World.add(engine.world, [flipper, pivot, joint]);
+        return { body: flipper, side: side, isPressed: false, minAngle: isLeft ? 0.45 : -0.45, maxAngle: isLeft ? -0.55 : 0.55 };
+    }
+
+    function updateFlipper(f) {
+        const target = f.isPressed ? f.maxAngle : f.minAngle;
+        Body.setAngularVelocity(f.body, (target - f.body.angle) * 0.42);
+    }
+
+    function spawnBall() {
+        if (ball) World.remove(engine.world, ball);
+        ballHistory = [];
+        ball = Bodies.circle(WIDTH - 100, PIVOT_Y - 300, BALL_RADIUS, { restitution: 0.6, density: 0.18, render: { fillStyle: '#fff' } });
+        World.add(engine.world, ball);
+    }
+
+    function setupControls() {
+        const handle = (side, pressed) => {
+            const f = (side === 'left') ? leftFlipper : rightFlipper;
+            if (f) f.isPressed = pressed;
+            const h = document.getElementById(`hint-${side === 'left' ? 'l' : 'r'}`);
+            if (h) h.classList.toggle('active', pressed);
+        };
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); [...e.changedTouches].forEach(t => handle(t.clientX < window.innerWidth / 2 ? 'left' : 'right', true)); }, { passive: false });
+        window.addEventListener('touchend', (e) => { e.preventDefault(); [...e.changedTouches].forEach(t => handle(t.clientX < window.innerWidth / 2 ? 'left' : 'right', false)); }, { passive: false });
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyA' || e.code === 'ArrowLeft') handle('left', true);
+            if (e.code === 'KeyD' || e.code === 'ArrowRight') handle('right', true);
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyA' || e.code === 'ArrowLeft') handle('left', false);
+            if (e.code === 'KeyD' || e.code === 'ArrowRight') handle('right', false);
+        });
+    }
+
+    window.onload = init;
+</script>
+
+</body>
+</html>
