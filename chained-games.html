@@ -17,6 +17,10 @@
             overflow: hidden;
             background: #000;
             font-family: 'Segoe UI', system-ui, sans-serif;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         #game-wrapper {
@@ -39,12 +43,14 @@
             pointer-events: none;
             transition: opacity 0.8s ease-in-out;
             visibility: hidden;
+            touch-action: auto;
         }
 
         .game-iframe.active {
             opacity: 1;
             pointer-events: all;
             visibility: visible;
+            touch-action: auto;
         }
 
         #transition-overlay {
@@ -86,6 +92,56 @@
             font-weight: 300;
             letter-spacing: 5px;
             opacity: 0.8;
+        }
+
+        #final-score-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 1s ease;
+        }
+
+        #final-score-screen.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        #final-score-title {
+            color: #fff;
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 15px;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+            margin-bottom: 40px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        #final-score-value {
+            color: #fff;
+            font-size: 5rem;
+            font-weight: 700;
+            text-shadow: 0 0 40px rgba(0, 242, 255, 0.8);
+            margin-bottom: 60px;
+            font-family: 'Courier New', monospace;
+        }
+
+        #final-score-breakdown {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1rem;
+            letter-spacing: 3px;
+            text-align: center;
+            line-height: 2;
         }
 
         @keyframes pulse {
@@ -176,6 +232,12 @@
     <div id="total-score">Total Score: 0</div>
 </div>
 
+<div id="final-score-screen">
+    <div id="final-score-title">GAME COMPLETE</div>
+    <div id="final-score-value">0</div>
+    <div id="final-score-breakdown"></div>
+</div>
+
 <script>
     // Game timeout configuration (in seconds) - set all timeouts here
     const GAME_TIMEOUTS = {
@@ -185,9 +247,10 @@
     };
 
     const games = [
+        { id: 'snow', iframeId: 'snow-iframe', file: 'snow_ninja.html', timeout: GAME_TIMEOUTS.snow },
         { id: 'resonance', iframeId: 'resonance-iframe', file: 'resonance.html', timeout: GAME_TIMEOUTS.resonance },
         { id: 'pinball', iframeId: 'pinball-iframe', file: 'pinball_wizard.html', timeout: GAME_TIMEOUTS.pinball },
-        { id: 'snow', iframeId: 'snow-iframe', file: 'snow_ninja.html', timeout: GAME_TIMEOUTS.snow }
+
     ];
 
     let currentGameIndex = 0;
@@ -235,7 +298,11 @@
             const currentIframe = document.getElementById(games[currentGameIndex].iframeId);
             if (currentIframe) {
                 currentIframe.classList.remove('active');
+                currentIframe.style.visibility = 'hidden';
+                currentIframe.style.pointerEvents = 'none';
                 currentIframe.src = 'about:blank';
+                // Clear event handlers
+                currentIframe.onclick = null;
             }
             
             // Clear timeout and interval
@@ -251,34 +318,37 @@
             currentGameIndex++;
             
             if (currentGameIndex >= games.length) {
-                // All games completed
-                text.textContent = 'GAME COMPLETE!';
-                scoreDisplay.textContent = `Final Score: ${totalScore}`;
+                // All games completed - destroy all games and show final score
+                overlay.classList.remove('show');
                 
+                // Destroy all game iframes
+                games.forEach(game => {
+                    const iframe = document.getElementById(game.iframeId);
+                    if (iframe) {
+                        iframe.src = 'about:blank';
+                        iframe.classList.remove('active');
+                        iframe.style.visibility = 'hidden';
+                        iframe.style.pointerEvents = 'none';
+                        iframe.style.opacity = '0';
+                        iframe.onclick = null;
+                    }
+                });
+                
+                // Clear all timeouts
+                if (gameTimeoutId) {
+                    clearTimeout(gameTimeoutId);
+                    gameTimeoutId = null;
+                }
+                if (window.gameTimeInterval) {
+                    clearInterval(window.gameTimeInterval);
+                    window.gameTimeInterval = null;
+                }
+                
+                // Show final score screen
                 setTimeout(() => {
-                    // Reset and restart from beginning
-                    currentGameIndex = 0;
-                    totalScore = 0;
-                    gameScores = {};
-                    
-                    // Reset all iframes to blank to stop games
-                    games.forEach(game => {
-                        const iframe = document.getElementById(game.iframeId);
-                        if (iframe) {
-                            iframe.src = 'about:blank';
-                            iframe.classList.remove('active');
-                        }
-                    });
-                    
-                    text.textContent = 'NEXT GAME...';
-                    scoreDisplay.textContent = `Total Score: 0`;
-                    
-                    setTimeout(() => {
-                        overlay.classList.remove('show');
-                        showGame(games[currentGameIndex]);
-                        gameTransitioning = false;
-                    }, 500);
-                }, 3000);
+                    showFinalScore();
+                    gameTransitioning = false;
+                }, 500);
                 return;
             }
 
@@ -348,12 +418,42 @@
         }
     }
 
+    function showFinalScore() {
+        const finalScreen = document.getElementById('final-score-screen');
+        const finalValue = document.getElementById('final-score-value');
+        const finalBreakdown = document.getElementById('final-score-breakdown');
+        
+        if (!finalScreen || !finalValue || !finalBreakdown) {
+            console.error('Final score screen elements not found');
+            return;
+        }
+        
+        // Set final score
+        finalValue.textContent = totalScore.toLocaleString();
+        
+        // Create score breakdown
+        let breakdownHTML = '<div style="margin-bottom: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 5px;">Score Breakdown</div>';
+        games.forEach(game => {
+            const score = gameScores[game.id] || 0;
+            const gameName = game.id.charAt(0).toUpperCase() + game.id.slice(1).replace('_', ' ');
+            breakdownHTML += `<div style="margin: 10px 0;">${gameName}: <span style="color: #00f2ff; font-weight: 600;">${score.toLocaleString()}</span></div>`;
+        });
+        finalBreakdown.innerHTML = breakdownHTML;
+        
+        // Show final screen
+        finalScreen.classList.add('show');
+    }
+
     function showGame(game) {
         // Hide all games first and stop them
         games.forEach(g => {
             const iframe = document.getElementById(g.iframeId);
             if (iframe && g.id !== game.id) {
                 iframe.classList.remove('active');
+                iframe.style.visibility = 'hidden';
+                iframe.style.pointerEvents = 'none';
+                // Clear event handlers to prevent conflicts
+                iframe.onclick = null;
                 // Stop the game by setting to blank
                 iframe.src = 'about:blank';
             }
@@ -391,8 +491,11 @@
                 setTimeout(() => {
                     iframe.classList.add('active');
                     iframe.style.visibility = 'visible';
+                    iframe.style.pointerEvents = 'all';
+                    iframe.style.touchAction = 'auto';
                     console.log('Game activated:', game.id);
-                    // Focus the iframe so it can receive keyboard events
+                    
+                    // Focus the iframe so it can receive keyboard and touch events
                     const focusIframe = () => {
                         try {
                             // Focus the iframe element first
@@ -403,15 +506,20 @@
                                 // Also focus the iframe's document body
                                 if (iframe.contentDocument && iframe.contentDocument.body) {
                                     iframe.contentDocument.body.focus();
+                                    // Don't override touch-action on body as it can interfere with game controls
+                                    // Let the game handle its own touch events
                                 }
                             }
                         } catch (e) {
                             console.warn('Could not focus iframe:', e);
                         }
                     };
+                    
+                    // Focus immediately
                     focusIframe();
                     
                     // Also focus on click to ensure keyboard events work
+                    // Don't add touchstart handler as it interferes with game touch controls
                     iframe.onclick = focusIframe;
                     
                     // Start timeout for this game
