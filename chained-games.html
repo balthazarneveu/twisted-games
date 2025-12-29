@@ -163,9 +163,9 @@
     <div id="start-instruction">Click to start the game experience</div>
 </div>
 
-<div id="game-wrapper">
-    <iframe id="pinball-iframe" class="game-iframe"></iframe>
-    <iframe id="snow-iframe" class="game-iframe"></iframe>
+    <div id="game-wrapper">
+    <iframe id="pinball-iframe" class="game-iframe" tabindex="0"></iframe>
+    <iframe id="snow-iframe" class="game-iframe" tabindex="0"></iframe>
 </div>
 
 <div id="transition-overlay">
@@ -378,6 +378,27 @@
                 iframe.onload = () => {
                     setTimeout(() => {
                         iframe.classList.add('active');
+                        // Focus the iframe so it can receive keyboard events
+                        const focusIframe = () => {
+                            try {
+                                // Focus the iframe element first
+                                iframe.focus();
+                                // Then focus the iframe's window (same origin, should work)
+                                if (iframe.contentWindow) {
+                                    iframe.contentWindow.focus();
+                                    // Also focus the iframe's document body
+                                    if (iframe.contentDocument && iframe.contentDocument.body) {
+                                        iframe.contentDocument.body.focus();
+                                    }
+                                }
+                            } catch (e) {
+                                // Cross-origin restrictions might prevent this, keyboard forwarding will handle it
+                            }
+                        };
+                        focusIframe();
+                        
+                        // Also focus on click to ensure keyboard events work
+                        iframe.addEventListener('click', focusIframe);
                         // Start timeout for this game
                         startGameTimeout(game);
                     }, 200);
@@ -418,6 +439,36 @@
         }
     }
 
+    // Forward keyboard events to active game iframe
+    function forwardKeyboardEvent(event) {
+        const activeGame = games[currentGameIndex];
+        if (activeGame) {
+            const iframe = document.getElementById(activeGame.iframeId);
+            if (iframe && iframe.classList.contains('active') && iframe.contentWindow) {
+                try {
+                    // Forward the keyboard event to the iframe
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    const newEvent = new KeyboardEvent(event.type, {
+                        key: event.key,
+                        code: event.code,
+                        keyCode: event.keyCode,
+                        which: event.which,
+                        shiftKey: event.shiftKey,
+                        ctrlKey: event.ctrlKey,
+                        altKey: event.altKey,
+                        metaKey: event.metaKey,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    iframe.contentWindow.dispatchEvent(newEvent);
+                } catch (e) {
+                    // Cross-origin restrictions might prevent this
+                    // In that case, the iframe should handle its own events
+                }
+            }
+        }
+    }
+
     window.addEventListener('load', () => {
         const fullscreenButton = document.getElementById('fullscreen-button');
         
@@ -426,6 +477,10 @@
         document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
         document.addEventListener('msfullscreenchange', handleFullscreenChange);
         document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        
+        // Forward keyboard events to active game
+        document.addEventListener('keydown', forwardKeyboardEvent);
+        document.addEventListener('keyup', forwardKeyboardEvent);
         
         // Button click handler
         fullscreenButton.addEventListener('click', () => {
