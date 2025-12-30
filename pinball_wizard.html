@@ -227,7 +227,12 @@
     let particles = [];
     let ballHistory = [];
     let gameActive = true;
-    let gameTimeout = null; 
+    let gameTimeout = null;
+    
+    // Detect mobile device for performance optimizations
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    // Detect very high DPI devices (like Pixel 8a) that need extra optimization
+    const isHighDPI = window.devicePixelRatio && window.devicePixelRatio >= 2.5; 
 
     function init() {
         // Reset for chained games and enable fullscreen mode
@@ -259,8 +264,10 @@
         const isFullscreen = window.parent !== window;
         
         // Limit pixel ratio for better performance on high-DPI devices (like Pixel 8a)
-        // Cap at 2.0 to prevent excessive rendering overhead
-        const maxPixelRatio = 2.0;
+        // Cap at 1.0 for mobile devices to prevent excessive rendering overhead
+        // Pixel 8a has very high DPI (often 3.0+), so rendering at 1.0x still looks great but much faster
+        // For very high DPI devices, force 1.0 even if not mobile
+        const maxPixelRatio = (isMobile || isHighDPI) ? 1.0 : 2.0;
         const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
         
         render = Render.create({
@@ -293,71 +300,91 @@
             const ctx = render.context;
             time += 0.02;
 
-            // Background Geometric Style Lines - Optimized with batch operations
-            ctx.save();
-            ctx.strokeStyle = 'rgba(188, 19, 254, 0.15)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            for(let i=-3; i<=7; i++) {
-                ctx.moveTo(WIDTH/2 + (i * 70), 0);
-                ctx.lineTo(WIDTH/2 + (i * 140), HEIGHT);
+            // Background Geometric Style Lines - Optimized for mobile
+            // Skip entirely on very high DPI devices for maximum performance
+            if (!isHighDPI) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(188, 19, 254, 0.12)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                // Reduced line count for mobile performance
+                const lineCount = isMobile ? 6 : 11;
+                for(let i=-2; i<=lineCount-5; i++) {
+                    ctx.moveTo(WIDTH/2 + (i * 70), 0);
+                    ctx.lineTo(WIDTH/2 + (i * 140), HEIGHT);
+                }
+                ctx.stroke();
+                
+                ctx.beginPath();
+                const horizLines = isMobile ? 5 : 8;
+                for(let j=0; j<horizLines; j++) {
+                    const yPos = ((time * 150 + j * 100) % HEIGHT);
+                    ctx.globalAlpha = 0.12 * (yPos / HEIGHT);
+                    ctx.moveTo(0, yPos);
+                    ctx.lineTo(WIDTH, yPos);
+                }
+                ctx.stroke();
+                ctx.restore();
             }
-            ctx.stroke();
-            
-            ctx.beginPath();
-            for(let j=0; j<8; j++) {
-                const yPos = ((time * 150 + j * 100) % HEIGHT);
-                ctx.globalAlpha = 0.15 * (yPos / HEIGHT);
-                ctx.moveTo(0, yPos);
-                ctx.lineTo(WIDTH, yPos);
-            }
-            ctx.stroke();
-            ctx.restore();
 
             // Orbitals - Optimized with fewer points for better performance
-            ctx.save();
-            ctx.globalAlpha = 0.08;
-            ctx.strokeStyle = '#bc13fe';
-            ctx.beginPath();
-            for(let i=0; i<Math.PI*2; i+=0.15) {
-                const x = WIDTH/2 + Math.sin(3 * i + time) * 120;
-                const y = HEIGHT/2 + Math.cos(2 * i + time * 0.4) * 160;
-                if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            // Skip on very high DPI devices for maximum performance
+            if (!isHighDPI) {
+                ctx.save();
+                ctx.globalAlpha = 0.08;
+                ctx.strokeStyle = '#bc13fe';
+                ctx.beginPath();
+                // Reduced point density for mobile
+                const orbitalStep = isMobile ? 0.25 : 0.15;
+                for(let i=0; i<Math.PI*2; i+=orbitalStep) {
+                    const x = WIDTH/2 + Math.sin(3 * i + time) * 120;
+                    const y = HEIGHT/2 + Math.cos(2 * i + time * 0.4) * 160;
+                    if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.restore();
             }
-            ctx.stroke();
-            ctx.restore();
 
             // Top Math Shape - Optimized with fewer points
-            ctx.save();
-            ctx.globalAlpha = 0.3;
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = '#ff00ff';
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = '#ff00ff';
-            ctx.beginPath();
-            const rX = WIDTH / 2, rY = 115;
-            for(let i=0; i < Math.PI * 2; i += 0.08) {
-                const r = 55 * Math.cos(4 * (i + time * 0.5));
-                const x = rX + r * Math.cos(i);
-                const y = rY + r * Math.sin(i);
-                if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-            }
-            ctx.closePath(); ctx.stroke(); ctx.restore();
-
-            // Bottom Flower of Life
-            ctx.save();
-            ctx.globalAlpha = 0.2;
-            ctx.lineWidth = 1.2;
-            ctx.strokeStyle = '#00ffff';
-            ctx.shadowBlur = 8;
-            const folX = WIDTH / 2, folY = PIVOT_Y - 140;
-            for(let i=0; i<6; i++) {
-                const angle = i * Math.PI / 3 + time * 0.3;
+            // Skip on very high DPI devices for maximum performance
+            if (!isHighDPI) {
+                ctx.save();
+                ctx.globalAlpha = 0.3;
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = '#ff00ff';
+                // Reduced shadow blur for mobile performance
+                ctx.shadowBlur = isMobile ? 5 : 10;
+                ctx.shadowColor = '#ff00ff';
                 ctx.beginPath();
-                ctx.arc(folX + Math.cos(angle)*25, folY + Math.sin(angle)*25, 25, 0, Math.PI*2);
-                ctx.stroke();
+                const rX = WIDTH / 2, rY = 115;
+                // Reduced point density for mobile
+                const mathShapeStep = isMobile ? 0.12 : 0.08;
+                for(let i=0; i < Math.PI * 2; i += mathShapeStep) {
+                    const r = 55 * Math.cos(4 * (i + time * 0.5));
+                    const x = rX + r * Math.cos(i);
+                    const y = rY + r * Math.sin(i);
+                    if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.closePath(); ctx.stroke(); ctx.restore();
             }
-            ctx.beginPath(); ctx.arc(folX, folY, 25, 0, Math.PI*2); ctx.stroke(); ctx.restore();
+
+            // Bottom Flower of Life - Reduced shadow for mobile
+            // Skip on very high DPI devices for maximum performance
+            if (!isHighDPI) {
+                ctx.save();
+                ctx.globalAlpha = 0.2;
+                ctx.lineWidth = 1.2;
+                ctx.strokeStyle = '#00ffff';
+                ctx.shadowBlur = isMobile ? 4 : 8;
+                const folX = WIDTH / 2, folY = PIVOT_Y - 140;
+                for(let i=0; i<6; i++) {
+                    const angle = i * Math.PI / 3 + time * 0.3;
+                    ctx.beginPath();
+                    ctx.arc(folX + Math.cos(angle)*25, folY + Math.sin(angle)*25, 25, 0, Math.PI*2);
+                    ctx.stroke();
+                }
+                ctx.beginPath(); ctx.arc(folX, folY, 25, 0, Math.PI*2); ctx.stroke(); ctx.restore();
+            }
 
             // Mirror Glass Look
             if (!mirrorBroken) {
@@ -377,7 +404,9 @@
                 ctx.save();
                 ctx.clip();
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-                ctx.shadowBlur = 3; ctx.shadowColor = '#fff';
+                // Reduced shadow blur for mobile
+                ctx.shadowBlur = isMobile ? 1 : 3; 
+                ctx.shadowColor = '#fff';
                 ctx.lineWidth = 1.2;
                 ctx.beginPath();
                 mirrorCracks.forEach(path => {
@@ -393,7 +422,8 @@
                 ctx.restore();
 
                 const gLevel = 4 + (mirrorHealth * 6); 
-                ctx.shadowBlur = 20 + (mirrorFlash * 25);
+                // Reduced shadow blur for mobile performance
+                ctx.shadowBlur = isMobile ? (10 + (mirrorFlash * 12)) : (20 + (mirrorFlash * 25));
                 ctx.shadowColor = mirrorFlash > 0 ? '#ff00ff' : '#00ffff';
                 ctx.strokeStyle = mirrorFlash > 0 ? '#ff00ff' : '#ffffff';
                 ctx.lineWidth = gLevel;
@@ -406,11 +436,14 @@
             // Ball Trail - Optimized with reduced trail length
             if (ball) {
                 ballHistory.push({ x: ball.position.x, y: ball.position.y });
-                if (ballHistory.length > 12) ballHistory.shift(); // Reduced from 15 to 12
+                // Further reduced trail length for mobile
+                const maxTrailLength = isMobile ? 8 : 12;
+                if (ballHistory.length > maxTrailLength) ballHistory.shift();
                 ctx.save(); 
                 ctx.lineWidth = 6; 
                 ctx.lineCap = 'round';
-                ctx.shadowBlur = 12; 
+                // Reduced shadow blur for mobile
+                ctx.shadowBlur = isMobile ? 6 : 12; 
                 ctx.shadowColor = '#00ffff';
                 for (let i = 0; i < ballHistory.length - 1; i++) {
                     const a = (i / ballHistory.length) * 0.5;
@@ -433,7 +466,8 @@
                 } else {
                     ctx.fillStyle = p.color; 
                     ctx.globalAlpha = p.life; 
-                    ctx.shadowBlur = 10; 
+                    // Reduced shadow blur for mobile performance
+                    ctx.shadowBlur = isMobile ? 5 : 10; 
                     ctx.shadowColor = p.color;
                     ctx.beginPath();
                     if (p.star) {
@@ -457,7 +491,7 @@
             }
             ctx.restore();
 
-            // Bumpers
+            // Bumpers - Reduced shadow effects for mobile
             bumpers.forEach(b => {
                 const { x, y } = b.position;
                 b.hitEffect = b.hitEffect || 0; b.hitEffect *= 0.92;
@@ -465,16 +499,19 @@
                 if (b.label === 'crown-bumper') {
                     const r = b.radius + (b.hitEffect * 30);
                     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-                    ctx.shadowBlur = 35 + (b.hitEffect * 70); ctx.shadowColor = '#ffff00';
+                    ctx.shadowBlur = isMobile ? (18 + (b.hitEffect * 35)) : (35 + (b.hitEffect * 70)); 
+                    ctx.shadowColor = '#ffff00';
                     ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 5 + (b.hitEffect * 12); ctx.stroke();
                 } else if (b.label.includes('music-bumper')) {
                     const r = b.radius + (b.hitEffect * 15);
                     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-                    ctx.shadowBlur = 18 + (b.hitEffect * 35); ctx.shadowColor = b.render.glow;
+                    ctx.shadowBlur = isMobile ? (9 + (b.hitEffect * 18)) : (18 + (b.hitEffect * 35)); 
+                    ctx.shadowColor = b.render.glow;
                     ctx.strokeStyle = b.render.glow; ctx.lineWidth = 3 + (b.hitEffect * 6); ctx.stroke();
                 } else if (b.label === 'side-bumper') {
                     const w = 2 + (b.hitEffect * 10);
-                    ctx.lineWidth = w; ctx.shadowBlur = 15 + (b.hitEffect * 35);
+                    ctx.lineWidth = w; 
+                    ctx.shadowBlur = isMobile ? (8 + (b.hitEffect * 18)) : (15 + (b.hitEffect * 35));
                     ctx.shadowColor = b.render.glow; ctx.strokeStyle = b.render.glow;
                     ctx.beginPath(); ctx.moveTo(x, y - 60); ctx.lineTo(x, y + 60); ctx.stroke();
                 }
@@ -487,24 +524,27 @@
                 ctx.restore();
             });
 
-            // Ball
+            // Ball - Reduced shadow for mobile
             if (ball) {
                 ctx.save(); ctx.beginPath(); ctx.arc(ball.position.x, ball.position.y, BALL_RADIUS, 0, Math.PI * 2);
-                ctx.shadowBlur = 20; ctx.shadowColor = "#fff"; ctx.fillStyle = "#fff"; ctx.fill(); ctx.restore();
+                ctx.shadowBlur = isMobile ? 10 : 20; 
+                ctx.shadowColor = "#fff"; ctx.fillStyle = "#fff"; ctx.fill(); ctx.restore();
             }
 
-            // Foreground Text
+            // Foreground Text - Reduced shadow for mobile
             ctx.save(); ctx.textAlign = 'center';
             if (wizardModeTimer > 0) {
                 const a = Math.min(1.0, wizardModeTimer / 30);
                 const s = 1.0 + Math.sin(time * 18) * 0.12;
                 ctx.globalAlpha = a; ctx.fillStyle = '#ff00ff'; ctx.font = `bold ${34 * s}px Arial`;
-                ctx.shadowBlur = 30; ctx.shadowColor = '#ff00ff'; ctx.fillText('PINBALL WIZARD', WIDTH / 2, 85);
+                ctx.shadowBlur = isMobile ? 15 : 30; 
+                ctx.shadowColor = '#ff00ff'; ctx.fillText('PINBALL WIZARD', WIDTH / 2, 85);
             }
             if (smashTextTimer > 0) {
                 const a = Math.min(1.0, smashTextTimer / 25);
                 ctx.globalAlpha = a; ctx.fillStyle = '#00ffff'; ctx.font = `bold 28px Arial`;
-                ctx.shadowBlur = 25; ctx.shadowColor = '#00ffff'; ctx.fillText('SMASH THE MIRROR!', WIDTH / 2, DOME_Y + 120);
+                ctx.shadowBlur = isMobile ? 12 : 25; 
+                ctx.shadowColor = '#00ffff'; ctx.fillText('SMASH THE MIRROR!', WIDTH / 2, DOME_Y + 120);
             }
             ctx.restore();
         });
@@ -543,9 +583,9 @@
         });
 
         runner = Runner.create({
-            // Limit frame rate to 60fps for consistent performance
+            // Limit frame rate - lower on mobile for better performance
             // Lower delta helps prevent physics instability on slower devices
-            delta: 1000 / 60,
+            delta: isMobile ? (1000 / 50) : (1000 / 60),
             // Enable timing correction for smoother gameplay
             isFixed: false
         }); 
@@ -568,15 +608,17 @@
     }
 
     function spawnParticles(x, y, color) {
-        // Reduced particle count for better performance
-        for (let i = 0; i < 12; i++) {
+        // Reduced particle count for better performance on mobile
+        const particleCount = isMobile ? 8 : 12;
+        for (let i = 0; i < particleCount; i++) {
             particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10, size: Math.random() * 4 + 1, life: 1.0, color: color || '#fff' });
         }
     }
 
     function spawnWizardParticles(x, y) {
-        // Reduced particle count for better performance
-        for (let i = 0; i < 35; i++) {
+        // Reduced particle count for better performance on mobile
+        const particleCount = isMobile ? 20 : 35;
+        for (let i = 0; i < particleCount; i++) {
             particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 22, vy: (Math.random() - 0.5) * 22, size: Math.random() * 6 + 4, life: 1.6, color: '#ffff00', star: true, rotation: Math.random() * Math.PI });
         }
     }
@@ -585,8 +627,9 @@
         mirrorBroken = true; mirrorSegments.forEach(seg => World.remove(engine.world, seg));
         mirrorSegments = []; mirrorCracks = []; score += 30000;
         document.getElementById('score').innerText = score.toString().padStart(6, '0');
-        // Reduced particle count for better performance
-        for (let i = 0; i < 60; i++) {
+        // Reduced particle count for better performance on mobile
+        const particleCount = isMobile ? 35 : 60;
+        for (let i = 0; i < particleCount; i++) {
             const angle = Math.PI + Math.random() * Math.PI;
             particles.push({ x: DOME_X + Math.cos(angle) * (Math.random() * MIRROR_RADIUS), y: DOME_Y + Math.sin(angle) * (Math.random() * MIRROR_RADIUS), vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 15 + 2, size: Math.random() * 10 + 4, life: 2.8, color: 'rgba(0, 255, 255, 0.8)', shard: true, rotation: Math.random() * Math.PI });
         }
