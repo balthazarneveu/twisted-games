@@ -133,9 +133,6 @@
                 <p id="level-indicator" class="text-[10px] uppercase font-black tracking-[0.2em] text-yellow-500 mb-1">LEVEL 1: ZEN</p>
                 <div id="total-score" class="text-4xl font-black text-white">$0</div>
             </div>
-            <div id="timer-display" class="text-3xl font-black tabular-nums bg-white/5 px-4 py-2 rounded-xl border border-white/10">
-                10.00
-            </div>
         </div>
 
         <!-- The Board -->
@@ -259,8 +256,10 @@
             document.getElementById('danger-text').textContent = level.danger;
             document.getElementById('danger-bar').style.opacity = currentLevel > 0 ? "1" : "0.4";
             
-            timerDisplay.textContent = (level.time / 1000).toFixed(2);
-            timerDisplay.classList.remove('text-red-500');
+            if (timerDisplay) {
+                timerDisplay.textContent = (level.time / 1000).toFixed(2);
+                timerDisplay.classList.remove('text-red-500');
+            }
             startOverlay.classList.remove('hidden-ui');
             endOverlay.classList.add('hidden-ui');
 
@@ -357,8 +356,10 @@
             const elapsed = Date.now() - startTime;
             const remaining = Math.max(0, level.time - elapsed);
             
-            timerDisplay.textContent = (remaining / 1000).toFixed(2);
-            if (remaining < 3000) timerDisplay.classList.add('text-red-500');
+            if (timerDisplay) {
+                timerDisplay.textContent = (remaining / 1000).toFixed(2);
+                if (remaining < 3000) timerDisplay.classList.add('text-red-500');
+            }
 
             if (remaining <= 0) completeLevel();
             else requestAnimationFrame(updateLoop);
