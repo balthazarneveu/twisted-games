@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Morning Rush - Zen Edition v39</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation;
+            overflow: hidden;
+            background-color: #f8fafc;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .timer-bar { transition: width 0.1s linear; }
+        .svg-shadow { filter: drop-shadow(0 20px 15px rgba(0,0,0,0.12)); }
+        .perfect-glow { filter: drop-shadow(0 0 25px rgba(34, 197, 94, 1)); transition: filter 0.15s ease-out; }
+        
+        .limb-transition { 
+            transition: transform 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.2s; 
+        }
+
+        .trick-counter {
+            font-weight: 900; font-style: italic; text-transform: uppercase;
+            letter-spacing: -0.05em; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: transparent !important;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .animate-blink { animation: blink 0.6s infinite; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+        .shake-anim { animation: shake 0.2s ease-in-out infinite; }
+        
+        .score-pop { animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes hint-swipe {
+            0% { transform: translate(-50%, 0); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translate(0%, -60px); opacity: 0; }
+        }
+        .hint-arrow { animation: hint-swipe 1.2s infinite; }
+
+        @keyframes hint-side {
+            0%, 100% { transform: translateX(-40px); opacity: 0.3; }
+            50% { transform: translateX(40px); opacity: 0.8; }
+        }
+        .hint-wax { animation: hint-side 1.2s infinite ease-in-out; }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center m-0 p-0 overflow-hidden bg-slate-50">
+
+    <!-- UI Overlay -->
+    <div id="ui-top" class="fixed top-0 left-0 w-full z-50">
+        <div id="timer-container" class="w-full h-2 bg-slate-200">
+            <div id="timer-bar" class="timer-bar h-full bg-slate-900 w-full"></div>
+        </div>
+        <div class="flex justify-between px-6 py-4 items-center bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+            <div class="flex flex-col">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none">Score</span>
+                <span id="current-score" class="text-3xl font-black text-slate-900 leading-none mt-1">0</span>
+            </div>
+            <div class="text-right flex flex-col">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none">Record</span>
+                <span id="record" class="text-sm font-black text-slate-500 leading-none mt-1">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scène de jeu -->
+    <div id="stage" class="w-full h-full flex flex-col items-center justify-center relative transition-colors duration-700 bg-white pt-16">
+        <div class="text-center max-w-xs scale-110">
+            <div class="text-9xl mb-8 drop-shadow-2xl">🚵</div>
+            <h1 class="text-5xl font-black mb-1 italic uppercase tracking-tighter text-slate-900 leading-none">Morning Rush</h1>
+            <p class="text-slate-400 font-bold mb-10 text-[10px] tracking-[0.5em] uppercase text-center">Édition Zen v39</p>
+            <button id="start-btn" class="bg-slate-900 text-white w-full py-6 rounded-[2rem] font-black uppercase tracking-widest text-xl active:scale-95 shadow-2xl">
+                Lancer
+            </button>
+        </div>
+    </div>
+
+    <!-- Feedback UI -->
+    <div id="feedback" class="fixed inset-0 pointer-events-none flex items-center justify-center z-40 opacity-0 transition-opacity duration-300">
+        <span id="feedback-text" class="text-6xl font-black text-white italic uppercase tracking-tighter text-center px-6 drop-shadow-lg"></span>
+    </div>
+
+    <script>
+        const stage = document.getElementById('stage');
+        const timerBar = document.getElementById('timer-bar');
+        const scoreEl = document.getElementById('current-score');
+        const recordEl = document.getElementById('record');
+        const feedbackEl = document.getElementById('feedback');
+        const feedbackText = document.getElementById('feedback-text');
+        
+        let state = {
+            score: 0,
+            record: localStorage.getItem('morningRushRecordV39') || 0,
+            difficulty: 1.0,
+            baseTime: 10000, 
+            timerInterval: null,
+            currentLevelIndex: -1,
+            animationId: null,
+            isGameRunning: false
+        };
+
+        recordEl.innerText = state.record;
+
+        function cleanup() {
+            state.isGameRunning = false;
+            if (state.timerInterval) clearInterval(state.timerInterval);
+            if (state.animationId) cancelAnimationFrame(state.animationId);
+            if (typeof activeCleanup === 'function') activeCleanup();
+            stage.onmousedown = stage.ontouchstart = stage.onmousemove = stage.ontouchmove = stage.onclick = null;
+            window.onmouseup = window.ontouchend = null;
+            stage.innerHTML = '';
+            stage.className = "w-full h-full flex flex-col items-center justify-center relative transition-colors duration-500 bg-white pt-16";
+            activeCleanup = () => {};
+        }
+
+        function updateScore(success, msg = "") {
+            if (!state.isGameRunning) return;
+            state.isGameRunning = false;
+            if (state.timerInterval) clearInterval(state.timerInterval);
+            if (success) {
+                state.score++;
+                scoreEl.classList.add('score-pop');
+                setTimeout(() => scoreEl.classList.remove('score-pop'), 300);
+                if (state.score > state.record) {
+                    state.record = state.score;
+                    localStorage.setItem('morningRushRecordV39', state.record);
+                    recordEl.innerText = state.record;
+                }
+                showFeedback(msg || "BIEN !", "bg-emerald-500");
+            } else {
+                state.score = 0;
+                showFeedback(msg || "EPIC FAIL", "bg-rose-600");
+            }
+            scoreEl.innerText = state.score;
+            state.difficulty = 1 + (state.score * 0.05);
+            setTimeout(nextLevel, 1300);
+        }
+
+        function showFeedback(text, colorClass) {
+            feedbackText.innerText = text;
+            stage.classList.add(colorClass);
+            if(text === "EPIC FAIL") feedbackText.classList.add('shake-anim');
+            else feedbackText.classList.remove('shake-anim');
+            feedbackEl.style.opacity = "1";
+            setTimeout(() => feedbackEl.style.opacity = "0", 800);
+        }
+
+        function startTimer() {
+            const levelTime = Math.max(3800, state.baseTime - (state.score * 200));
+            let timeLeft = levelTime;
+            timerBar.style.width = '100%';
+            state.timerInterval = setInterval(() => {
+                timeLeft -= 50;
+                timerBar.style.width = `${(timeLeft / levelTime) * 100}%`;
+                if (timeLeft <= 0) {
+                    clearInterval(state.timerInterval);
+                    updateScore(false, "TROP LENT !");
+                }
+            }, 50);
+        }
+
+        function nextLevel() {
+            cleanup();
+            state.isGameRunning = true;
+            const levels = [
+                levelBarspin, levelTailwhip, levelOllie, 
+                levelPedal, levelKickflip, levelPump,
+                levelScrew, levelWax
+            ];
+            let idx;
+            do { idx = Math.floor(Math.random() * levels.length); } while (idx === state.currentLevelIndex);
+            state.currentLevelIndex = idx;
+            levels[idx]();
+            startTimer();
+        }
+
+        function isLandedCorrectly(angle, tolerance = 30) {
+            const norm = Math.abs(angle % 360);
+            const diff = Math.min(norm, 360 - norm);
+            return diff <= tolerance;
+        }
+
+        // --- MINI JEUX ---
+
+        function levelBarspin() {
+            stage.innerHTML = `
+                <div class="flex flex-col items-center justify-center gap-16 h-[65vh]">
+                    <div id="rot-counter" class="trick-counter text-4xl text-slate-900 opacity-0">1x BARSPIN</div>
+                    <div class="relative w-72 h-72 flex items-center justify-center overflow-visible">
+                        <svg class="w-full h-full svg-shadow" viewBox="0 0 200 200">
+                            <rect x="95" y="60" width="10" height="40" fill="#1e293b" rx="2" />
+                            <circle cx="100" cy="100" r="16" fill="#334155"/>
+                            <g id="bars-target" style="transform-origin: 100px 100px;">
+                                <path d="M 40 105 L 90 100 L 110 100 L 160 105" fill="none" stroke="#1e293b" stroke-width="12" stroke-linecap="round" />
+                                <rect x="30" y="98" width="30" height="14" rx="4" fill="#0f172a" />
+                                <rect x="140" y="98" width="30" height="14" rx="4" fill="#0f172a" />
+                            </g>
+                            <g id="h-l" class="limb-transition"><rect x="25" y="90" width="40" height="30" rx="8" fill="#fecaca" /></g>
+                            <g id="h-r" class="limb-transition"><rect x="135" y="90" width="40" height="30" rx="8" fill="#fecaca" /></g>
+                        </svg>
+                    </div>
+                </div>`;
+            const bars = document.getElementById('bars-target'), hL = document.getElementById('h-l'), hR = document.getElementById('h-r'), rotDisplay = document.getElementById('rot-counter');
+            let angle = 0, cumulativeAngle = 0, status = 'READY', speed = 2.6 * state.difficulty;
+            const handleTap = (e) => {
+                if(e.preventDefault) e.preventDefault();
+                if (status === 'READY') {
+                    status = 'SPINNING';
+                    hL.style.transform = "translateX(-65px) translateY(30px)"; 
+                    hR.style.transform = "translateX(65px) translateY(30px)";
+                    const anim = () => {
+                        if (status !== 'SPINNING') return;
+                        cumulativeAngle += speed; angle = cumulativeAngle % 360;
+                        bars.style.transform = `rotate(${cumulativeAngle}deg)`;
+                        const count = Math.floor((cumulativeAngle + 30) / 360);
+                        if (count > 0) {
+                            rotDisplay.innerText = `${count}x BARSPIN`; rotDisplay.style.opacity = isLandedCorrectly(angle) ? "1" : "0";
+                        }
+                        if(isLandedCorrectly(angle)) bars.classList.add('perfect-glow'); else bars.classList.remove('perfect-glow');
+                        state.animationId = requestAnimationFrame(anim);
+                    }; anim();
+                } else if (status === 'SPINNING') {
+                    if (cumulativeAngle < 180) return;
+                    status = 'STOP'; 
+                    const success = isLandedCorrectly(angle);
+                    if (success) {
+                        hL.style.transform = "translateX(0) translateY(0)"; hR.style.transform = "translateX(0) translateY(0)";
+                        bars.style.transform = `rotate(${Math.round(cumulativeAngle / 360) * 360}deg)`;
+                        setTimeout(() => updateScore(true, "BARSPIN !"), 200);
+                    } else updateScore(false);
+                }
+            };
+            stage.addEventListener('mousedown', handleTap); stage.addEventListener('touchstart', handleTap, {passive:false});
+            activeCleanup = () => { stage.removeEventListener('mousedown', handleTap); stage.removeEventListener('touchstart', handleTap); };
+        }
+
+        function levelTailwhip() {
+            stage.innerHTML = `
+                <div class="flex flex-col items-center justify-center gap-12 h-[65vh]">
+                    <div id="rot-counter" class="trick-counter text-4xl text-slate-900 opacity-0">1x TAILWHIP</div>
+                    <div class="relative w-64 h-80 flex items-center justify-center overflow-visible">
+                        <svg class="w-full h-full svg-shadow overflow-visible" viewBox="0 0 200 300">
+                            <g id="deck-target" style="transform-origin: 100px 60px;">
+                                <rect x="82" y="45" width="36" height="180" rx="4" fill="#334155" />
+                                <rect x="86" y="70" width="28" height="140" fill="#0f172a" />
+                            </g>
+                            <rect x="40" y="52" width="120" height="16" rx="8" fill="#1e293b" />
+                            <circle cx="100" cy="60" r="10" fill="#64748b" />
+                            <rect id="f-f" class="limb-transition" x="85" y="80" width="30" height="40" rx="8" fill="#3b82f6" />
+                            <rect id="f-b" class="limb-transition" x="85" y="160" width="30" height="40" rx="8" fill="#3b82f6" />
+                        </svg>
+                    </div>
+                </div>`;
+            const deck = document.getElementById('deck-target'), fF = document.getElementById('f-f'), fB = document.getElementById('f-b'), rotDisplay = document.getElementById('rot-counter');
+            let angle = 0, cumulativeAngle = 0, status = 'READY', speed = 3.5 * state.difficulty;
+            const handleTap = (e) => {
+                if(e.preventDefault) e.preventDefault();
+                if (status === 'READY') {
+                    status = 'SPINNING';
+                    fF.style.transform = "translateX(65px)"; fB.style.transform = "translateX(-65px)";
+                    const anim = () => {
+                        if (status !== 'SPINNING') return;
+                        cumulativeAngle += speed; angle = cumulativeAngle % 360;
+                        deck.style.transform = `rotate(${cumulativeAngle}deg)`;
+                        const count = Math.floor((cumulativeAngle + 30) / 360);
+                        if (count > 0) {
+                            rotDisplay.innerText = `${count}x TAILWHIP`; rotDisplay.style.opacity = isLandedCorrectly(angle) ? "1" : "0";
+                        }
+                        if(isLandedCorrectly(angle)) deck.classList.add('perfect-glow'); else deck.classList.remove('perfect-glow');
+                        state.animationId = requestAnimationFrame(anim);
+                    }; anim();
+                } else if (status === 'SPINNING') {
+                    if (cumulativeAngle < 180) return;
+                    status = 'STOP';
+                    const success = isLandedCorrectly(angle);
+                    if (success) {
+                        fF.style.transform = "translateX(0)"; fB.style.transform = "translateX(0)";
+                        deck.style.transform = `rotate(${Math.round(cumulativeAngle / 360) * 360}deg)`;
+                        setTimeout(() => updateScore(true, "TAILWHIP !"), 200);
+                    } else updateScore(false);
+                }
+            };
+            stage.addEventListener('mousedown', handleTap); stage.addEventListener('touchstart', handleTap, {passive:false});
+            activeCleanup = () => { stage.removeEventListener('mousedown', handleTap); stage.removeEventListener('touchstart', handleTap); };
+        }
+
+        function levelOllie() {
+            stage.innerHTML = `
+                <div class="text-center w-full flex flex-col items-center">
+                    <div class="relative w-80 h-72 border-b-4 border-slate-200 flex items-end justify-center pb-2">
+                        <div id="ollie-group" class="transition-all duration-300 relative flex flex-col items-center" style="transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);">
+                            <div class="absolute -top-1 w-full flex justify-center space-x-14 z-20 pointer-events-none">
+                                <div class="text-7xl drop-shadow-lg translate-y-11">👟</div> 
+                                <div class="text-7xl drop-shadow-lg translate-y-0">👟</div>
+                            </div>
+                            <div id="skate-target" class="text-[12rem] leading-none relative z-10 drop-shadow-xl">🛹</div>
+                        </div>
+                    </div>
+                </div>`;
+            const group = document.getElementById('ollie-group'), skate = document.getElementById('skate-target');
+            let done = false;
+            const handleAction = (e) => {
+                if (done) return;
+                if (((e.touches && e.touches.length) || 0) >= 2 || (e.type === 'mousedown' && e.shiftKey)) {
+                    done = true; 
+                    group.style.transform = "translateY(-220px) rotate(-12deg)"; skate.classList.add('perfect-glow');
+                    setTimeout(() => {
+                        group.style.transform = "translateY(0) rotate(0deg)";
+                        setTimeout(() => updateScore(true, "OLLIE !"), 300);
+                    }, 400);
+                }
+            };
+            stage.addEventListener('mousedown', handleAction); stage.addEventListener('touchstart', handleAction, {passive:false});
+            activeCleanup = () => { stage.removeEventListener('mousedown', handleAction); stage.removeEventListener('touchstart', handleAction); };
+        }
+
+        function levelKickflip() {
+            stage.innerHTML = `
+                <div class="text-center w-full flex flex-col items-center">
+                    <div class="relative w-80 h-72 border-b-4 border-slate-200 flex items-end justify-center pb-2 overflow-visible">
+                        <div class="absolute bottom-40 left-1/2 -translate-x-1/2 z-50 pointer-events-none hint-arrow">
+                            <svg class="w-16 h-16 text-slate-900 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="19" x2="12" y2="5"></line>
+                                <polyline points="5 12 12 5 19 12"></polyline>
+                            </svg>
+                        </div>
+                        <div id="skate-box" class="transition-all duration-300 relative">
+                            <div class="text-[12rem] leading-none relative z-10 drop-shadow-xl">🛹</div>
+                        </div>
+                    </div>
+                    <p class="mt-8 text-slate-400 font-black uppercase text-xs tracking-widest opacity-60 italic">Swipe haut droit</p>
+                </div>`;
+            const box = document.getElementById('skate-box');
+            let sY, sX, done = false;
+            const onS = (e) => { sY = e.touches ? e.touches[0].clientY : e.clientY; sX = e.touches ? e.touches[0].clientX : e.clientX; };
+            const onE = (e) => {
+                if (done || !sY) return;
+                const eY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY, eX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+                if (sY - eY > 50 && eX - sX > 30) {
+                    done = true; box.style.transition = "all 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28)";
+                    box.style.transform = "translateY(-180px) rotateX(360deg) rotateZ(15deg)";
+                    setTimeout(() => updateScore(true, "KICKFLIP !"), 500);
+                }
+            };
+            stage.addEventListener('mousedown', onS); stage.addEventListener('touchstart', onS);
+            window.addEventListener('mouseup', onE); window.addEventListener('touchend', onE);
+            activeCleanup = () => { 
+                window.removeEventListener('mouseup', onE); window.removeEventListener('touchend', onE); 
+            };
+        }
+
+        function levelPedal() {
+            stage.innerHTML = `<div class="flex flex-col items-center gap-10"><div class="text-2xl font-black italic">PÉDALE !</div><div class="flex gap-20"><div id="pL" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm">L</div><div id="pR" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm">R</div></div><div class="w-64 h-6 bg-slate-200 rounded-full overflow-hidden border border-slate-300 shadow-inner"><div id="pB" class="h-full bg-blue-500 w-0 transition-all"></div></div></div>`;
+            const pL = document.getElementById('pL'), pR = document.getElementById('pR'), pB = document.getElementById('pB');
+            let last = '', progress = 0;
+            const h = (s) => {
+                if (s === last) return; last = s; progress += 10; pB.style.width = `${progress}%`;
+                const el = s === 'L' ? pL : pR; el.style.background = "#e2e8f0"; setTimeout(() => el.style.background = "#f1f5f9", 100);
+                if (progress >= 100) updateScore(true, "À FOND !");
+            };
+            pL.onmousedown = pL.ontouchstart = (e) => { e.preventDefault(); h('L'); };
+            pR.onmousedown = pR.ontouchstart = (e) => { e.preventDefault(); h('R'); };
+        }
+
+        function levelPump() {
+            stage.innerHTML = `
+                <div class="flex flex-col items-center gap-4">
+                    <div class="text-3xl font-black italic text-slate-900 animate-blink uppercase">GONFLE !</div>
+                    <div class="relative h-64 w-40 flex items-end justify-center">
+                        <div id="pH" class="absolute top-0 w-32 h-6 bg-slate-800 rounded-full z-10 transition-all" style="transform:translateY(80px)"></div>
+                        <div class="w-14 h-56 bg-slate-100 border-4 border-slate-200 rounded-t-xl relative overflow-hidden">
+                            <div id="pF" class="absolute bottom-0 w-full bg-rose-500 transition-all duration-100" style="height:0%"></div>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-4">Tapes plusieurs fois sur la pompe</p>
+                </div>`;
+            const pH = document.getElementById('pH'), pF = document.getElementById('pF');
+            let psi = 0, status = 'UP';
+            const go = (e) => {
+                if(e.preventDefault) e.preventDefault();
+                if (status === 'UP') { 
+                    status = 'DOWN'; pH.style.transform = "translateY(200px)"; 
+                    psi += 10; // 10 tapes pour 100%
+                    pF.style.height = `${psi}%`;
+                    if (psi >= 100) updateScore(true, "GONFLÉ !");
+                } else { 
+                    status = 'UP'; pH.style.transform = "translateY(80px)"; 
+                }
+            };
+            stage.addEventListener('mousedown', go); stage.addEventListener('touchstart', go, {passive:false});
+            activeCleanup = () => { stage.removeEventListener('mousedown', go); stage.removeEventListener('touchstart', go); };
+        }
+
+        function levelScrew() {
+            stage.innerHTML = `
+                <div class="flex flex-col items-center gap-12">
+                    <div id="screw-gauge" class="text-2xl font-black italic uppercase">Serre la vis ! (3 tours)</div>
+                    <div class="relative w-64 h-64 flex items-center justify-center">
+                        <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#e2e8f0" stroke-width="5" />
+                            <circle id="screw-progress" cx="50" cy="50" r="45" fill="none" stroke="#3b82f6" stroke-width="5" stroke-dasharray="283" stroke-dashoffset="283" />
+                        </svg>
+                        <svg viewBox="0 0 100 100" class="w-full h-full relative z-10">
+                            <polygon points="50,42 57,46 57,54 50,58 43,54 43,46" fill="#94a3b8" />
+                            <g id="wrench" style="transform-origin:50px 50px">
+                                <path d="M50 50 L90 50 L90 60 L50 60 Z" fill="#cbd5e1" stroke="#475569" />
+                                <rect x="85" y="45" width="10" height="25" rx="5" fill="#1e293b" />
+                                <polygon points="50,44 55,47 55,53 50,56 45,53 45,47" fill="#1e293b" />
+                            </g>
+                        </svg>
+                    </div>
+                </div>`;
+            const wrench = document.getElementById('wrench'), progressCircle = document.getElementById('screw-progress');
+            let cumulativeAngle = 0, done = false, lastAngle = null;
+            const targetAngle = 1080;
+            const mv = (e) => { 
+                if (done) return; 
+                const rect = stage.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const cX = e.touches ? e.touches[0].clientX : e.clientX;
+                const cY = e.touches ? e.touches[0].clientY : e.clientY;
+                const currentAngle = Math.atan2(cY - centerY, cX - centerX) * 180 / Math.PI;
+                if (lastAngle !== null) {
+                    let delta = currentAngle - lastAngle;
+                    if (delta > 180) delta -= 360;
+                    if (delta < -180) delta += 360;
+                    if (delta > 0) {
+                        cumulativeAngle += delta;
+                        wrench.style.transform = `rotate(${cumulativeAngle}deg)`;
+                        const p = Math.min(1, cumulativeAngle / targetAngle);
+                        progressCircle.style.strokeDashoffset = 283 - (p * 283);
+                        if (cumulativeAngle >= targetAngle) { done = true; updateScore(true, "SERRÉ !"); }
+                    }
+                }
+                lastAngle = currentAngle;
+            };
+            stage.addEventListener('mousemove', mv); stage.addEventListener('touchmove', mv, {passive:false});
+            activeCleanup = () => { stage.removeEventListener('mousemove', mv); stage.removeEventListener('touchmove', mv); };
+        }
+
+        function levelWax() {
+            stage.innerHTML = `
+                <div class="flex flex-col items-center gap-12">
+                    <div class="relative w-80 h-24 bg-slate-100 rounded-full border-4 border-slate-200 overflow-hidden">
+                        <div class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none hint-wax">
+                             <svg class="w-12 h-12 text-slate-900 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                                <polyline points="21 18 15 12 21 6"></polyline>
+                            </svg>
+                        </div>
+                        <div id="wF" class="h-full bg-yellow-200 w-0 transition-all"></div>
+                    </div>
+                    <div id="wB" class="text-6xl transition-transform duration-75">🕯️</div>
+                    <div class="text-xl font-black italic uppercase">WAX !</div>
+                </div>`;
+            const wF = document.getElementById('wF'), wB = document.getElementById('wB');
+            let p = 0, lX = 0;
+            const mv = (e) => { 
+                const x = e.touches ? e.touches[0].clientX : e.clientX; 
+                if (Math.abs(x - lX) > 20) { 
+                    p += 6; lX = x; wF.style.width = `${p}%`; 
+                    wB.style.transform = `translateX(${(x - window.innerWidth/2)/2}px)`; 
+                    if (p >= 100) updateScore(true, "SLIDE!!"); 
+                } 
+            };
+            stage.addEventListener('mousemove', mv); stage.addEventListener('touchmove', mv, {passive:false});
+            activeCleanup = () => { stage.removeEventListener('mousemove', mv); stage.removeEventListener('touchmove', mv); };
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            state.score = 0; scoreEl.innerText = "0"; nextLevel();
+        });
+    </script>
+</body>
+</html>
