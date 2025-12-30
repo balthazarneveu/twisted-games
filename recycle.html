@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Eco-Tri : Expert du Tri</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+            background: #f0fdf4;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            user-select: none;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, #dcfce7, #bbf7d0);
+            transition: all 0.5s ease;
+        }
+        /* Styles dynamiques par niveau */
+        .bg-level-1 { background: linear-gradient(to bottom, #dcfce7, #bbf7d0); }
+        .bg-level-2 { background: linear-gradient(to bottom, #fef9c3, #fef08a); }
+        .bg-level-3 { background: linear-gradient(to bottom, #e2e8f0, #cbd5e1); }
+        
+        .blitz-mode-bg { background: linear-gradient(to bottom, #fca5a5, #f87171) !important; }
+
+        .bin {
+            position: absolute;
+            bottom: 40px;
+            width: 100px;
+            height: 120px;
+            border: 5px solid rgba(0,0,0,0.2);
+            border-top: none;
+            border-radius: 0 0 20px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            z-index: 20;
+            transition: background-color 0.3s;
+        }
+        .bin::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -5px;
+            right: -5px;
+            height: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 5px 5px 0 0;
+        }
+        .item {
+            position: absolute;
+            user-select: none;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .halo-green { filter: drop-shadow(0 0 15px #22c55e) drop-shadow(0 0 5px #15803d); }
+        .halo-red { filter: drop-shadow(0 0 15px #ef4444) drop-shadow(0 0 5px #b91c1c); }
+
+        #ui-layer {
+            position: absolute;
+            top: env(safe-area-inset-top, 20px);
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 100;
+        }
+        .stat-box {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 15px;
+            border-radius: 15px;
+            border: 2px solid #334155;
+            font-weight: 900;
+            color: #1e293b;
+            font-size: 1rem;
+        }
+        #level-indicator {
+            position: absolute;
+            top: 80px;
+            width: 100%;
+            text-align: center;
+            font-weight: 900;
+            font-size: 1.2rem;
+            color: #1e293b;
+            text-transform: uppercase;
+            z-index: 50;
+        }
+        #announcer {
+            position: absolute;
+            top: 35%;
+            width: 100%;
+            text-align: center;
+            font-size: 50px;
+            font-weight: 950;
+            color: white;
+            z-index: 200;
+            pointer-events: none;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-shadow: 3px 3px 0 rgba(0,0,0,0.2);
+        }
+        .show-announcement { opacity: 1 !important; transform: scale(1.1) !important; }
+
+        #overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: white;
+            text-align: center;
+            padding: 30px;
+        }
+        .btn {
+            background: #22c55e;
+            color: white;
+            padding: 18px 45px;
+            border-radius: 50px;
+            font-size: 22px;
+            font-weight: 900;
+            border: none;
+            box-shadow: 0 6px 0 #15803d;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #15803d; }
+        
+        .floating-score {
+            position: absolute;
+            font-weight: 900;
+            font-size: 32px;
+            pointer-events: none;
+            z-index: 150;
+            animation: scoreAnim 0.7s ease-out forwards;
+        }
+        @keyframes scoreAnim {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            40% { opacity: 1; transform: translateY(-40px) scale(1.2); }
+            100% { transform: translateY(-100px) scale(1); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container" class="bg-level-1">
+    <div id="announcer">MODE BLITZ !</div>
+    <div id="level-indicator">NIVEAU 1 : COMPOST</div>
+    
+    <div id="ui-layer">
+        <div class="stat-box">Score: <span id="score">0</span></div>
+        <div class="stat-box">⏱️ <span id="timer">30</span>s</div>
+    </div>
+
+    <div id="bin" class="bin" style="background-color: #166534;">
+        <span id="bin-emoji" style="font-size: 45px;">🥗</span>
+        <span id="bin-label" class="text-white text-[10px] font-black uppercase tracking-tighter">Compost</span>
+    </div>
+
+    <div id="overlay">
+        <h1 id="overlay-title" class="text-4xl font-black mb-4 italic uppercase">Eco-Tri Master</h1>
+        <div id="instructions" class="mb-8 space-y-4">
+            <p id="level-desc" class="text-xl">Niveau 1 : Attrape les <span class="text-green-400 font-bold">FRUITS</span> !</p>
+            <div id="tutorial-previews" class="flex justify-center gap-6 text-6xl py-4">
+                <span>🍎</span><span>🌽</span><span>🥑</span>
+            </div>
+            <p class="text-sm opacity-70">3 niveaux à franchir. Atteins 100 points pour avancer !</p>
+        </div>
+        <div id="final-stats" class="hidden mb-6">
+            <p class="text-2xl">Score Niveau : <span id="final-score" class="text-5xl font-black text-yellow-400">0</span></p>
+        </div>
+        <button id="start-btn" class="btn">C'EST PARTI !</button>
+    </div>
+</div>
+
+<script>
+    const bin = document.getElementById('bin');
+    const binEmoji = document.getElementById('bin-emoji');
+    const binLabel = document.getElementById('bin-label');
+    const scoreElement = document.getElementById('score');
+    const timerElement = document.getElementById('timer');
+    const levelIndicator = document.getElementById('level-indicator');
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('start-btn');
+    const container = document.getElementById('game-container');
+    const announcer = document.getElementById('announcer');
+
+    let score = 0;
+    let timeLeft = 30;
+    let gameActive = false;
+    let items = [];
+    let lastSpawn = 0;
+    let spawnInterval = 1400;
+    let binX = window.innerWidth / 2 - 50;
+    let isBlitz = false;
+    let currentLevel = 1;
+    let spawnCount = 0;
+
+    const LEVELS = {
+        1: {
+            name: "NIVEAU 1 : COMPOST",
+            desc: "Attrape les <span class='text-green-400'>BIO-DÉCHETS</span> !",
+            binColor: "#166534",
+            binEmoji: "🥗",
+            binLabel: "Compost",
+            target: ['🍎', '🍌', '🍐', '🍓', '🍊', '🍉', '🍇', '🌽', '🥕', '🥑', '🥦', '🍄', '🍅'],
+            enemy: ['🚀', '🚲', '🚗', '🚌', '⚓', '🛸', '🏗️', '🚜', '🗿'],
+            bg: 'bg-level-1'
+        },
+        2: {
+            name: "NIVEAU 2 : RECYCLAGE",
+            desc: "Attrape <span class='text-yellow-400'>CANETTES & EMBALLAGES</span> !",
+            binColor: "#eab308",
+            binEmoji: "📦",
+            binLabel: "Jaune",
+            target: ['🥫', '🍼', '🧴', '🥤', '🗞️', '📦', '📄', '🥡', '✉️', '📔'],
+            enemy: ['🍎', '🍌', '🍕', '🍔', '🍗', '🍩', '🍦', '🌮'],
+            bg: 'bg-level-2'
+        },
+        3: {
+            name: "NIVEAU 3 : ENCOMBRANTS",
+            desc: "Attrape les <span class='text-blue-400'>GROS OBJETS</span> !",
+            binColor: "#1e293b",
+            binEmoji: "🚛",
+            binLabel: "Bennes",
+            target: ['🚀', '🚲', '🚗', '🚌', '🚂', '🚁', '🚜', '🏗️', '🏠', '🗽'],
+            enemy: ['🥫', '🍎', '🥤', '🍓', '🍌', '📦', '🌽'],
+            bg: 'bg-level-3'
+        }
+    };
+
+    function updateLevelUI() {
+        const config = LEVELS[currentLevel];
+        container.className = config.bg;
+        bin.style.backgroundColor = config.binColor;
+        binEmoji.innerText = config.binEmoji;
+        binLabel.innerText = config.binLabel;
+        levelIndicator.innerText = config.name;
+        document.getElementById('level-desc').innerHTML = config.desc;
+        document.getElementById('tutorial-previews').innerHTML = config.target.slice(0,3).map(e => `<span>${e}</span>`).join('');
+    }
+
+    function handleMove(e) {
+        if (!gameActive) return;
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        binX = x - bin.offsetWidth / 2;
+        binX = Math.max(0, Math.min(window.innerWidth - bin.offsetWidth, binX));
+        bin.style.left = binX + 'px';
+    }
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', (e) => { handleMove(e); e.preventDefault(); }, { passive: false });
+
+    function startGame() {
+        score = 0;
+        timeLeft = 30;
+        gameActive = true;
+        isBlitz = false;
+        spawnCount = 0;
+        spawnInterval = 1400;
+        scoreElement.innerText = "0";
+        timerElement.innerText = "30";
+        items.forEach(item => item.el.remove());
+        items = [];
+        overlay.style.display = 'none';
+        container.classList.remove('blitz-mode-bg');
+        announcer.classList.remove('show-announcement');
+        updateLevelUI();
+        requestAnimationFrame(update);
+        startTimer();
+    }
+
+    function startTimer() {
+        const clock = setInterval(() => {
+            if (!gameActive) { clearInterval(clock); return; }
+            timeLeft--;
+            timerElement.innerText = timeLeft;
+            if (timeLeft === 7) triggerBlitz();
+            if (timeLeft <= 0) { endGame(); clearInterval(clock); }
+        }, 1000);
+    }
+
+    function triggerBlitz() {
+        isBlitz = true;
+        container.classList.add('blitz-mode-bg');
+        announcer.innerText = "MODE BLITZ !";
+        announcer.classList.add('show-announcement');
+        setTimeout(() => announcer.classList.remove('show-announcement'), 1500);
+    }
+
+    function endGame() {
+        gameActive = false;
+        overlay.style.display = 'flex';
+        const finalStats = document.getElementById('final-stats');
+        const overlayTitle = document.getElementById('overlay-title');
+        const instructions = document.getElementById('instructions');
+
+        finalStats.classList.remove('hidden');
+        document.getElementById('final-score').innerText = score;
+        instructions.classList.add('hidden');
+
+        if (score >= 100) {
+            if (currentLevel < 3) {
+                overlayTitle.innerText = "NIVEAU RÉUSSI !";
+                startBtn.innerText = "NIVEAU SUIVANT";
+                currentLevel++;
+            } else {
+                overlayTitle.innerText = "MAÎTRE DU TRI !";
+                startBtn.innerText = "RECOMMENCER TOUT";
+                currentLevel = 1;
+            }
+        } else {
+            overlayTitle.innerText = "ESSAIE ENCORE !";
+            startBtn.innerText = "RÉESSAYER LE NIVEAU";
+            instructions.classList.remove('hidden');
+            instructions.innerHTML = `<p class='text-red-400 font-bold'>Il te faut 100 points pour passer !</p>`;
+        }
+    }
+
+    function spawn() {
+        const config = LEVELS[currentLevel];
+        let isTarget;
+        
+        // Tuto scénarisé (2 premiers objets)
+        if (spawnCount === 0) isTarget = true;
+        else if (spawnCount === 1) isTarget = false;
+        else {
+            const enemyChance = isBlitz ? 0.08 : 0.4;
+            isTarget = Math.random() > enemyChance;
+        }
+        
+        const emoji = isTarget ? 
+            config.target[Math.floor(Math.random() * config.target.length)] : 
+            config.enemy[Math.floor(Math.random() * config.enemy.length)];
+
+        const el = document.createElement('div');
+        el.className = 'item';
+        el.innerText = emoji;
+        
+        let size = 60;
+        if (isBlitz) size = isTarget ? 40 : 110; // Blitz inversé : petites cibles, gros obstacles
+        el.style.fontSize = size + 'px';
+        
+        // Halo pédagogique
+        if (spawnCount < 3 || timeLeft > 26) {
+            el.classList.add(isTarget ? 'halo-green' : 'halo-red');
+        }
+
+        let startX = (spawnCount === 0) ? window.innerWidth * 0.3 : 
+                    (spawnCount === 1) ? window.innerWidth * 0.7 : 
+                    Math.random() * (window.innerWidth - size);
+        
+        el.style.left = Math.max(0, Math.min(window.innerWidth - size, startX)) + 'px';
+        el.style.top = '-120px';
+        container.appendChild(el);
+
+        let speed = 2 + Math.random() * 1.2;
+        if (timeLeft <= 15) speed += 1;
+        if (isBlitz) speed += 2;
+
+        items.push({ el, y: -120, isTarget, speed, size });
+        spawnCount++;
+    }
+
+    function feedback(txt, color, x) {
+        const f = document.createElement('div');
+        f.className = 'floating-score';
+        f.innerText = txt;
+        f.style.color = color;
+        f.style.left = x + 'px';
+        f.style.top = (window.innerHeight - 180) + 'px';
+        container.appendChild(f);
+        setTimeout(() => f.remove(), 700);
+    }
+
+    function update(timestamp) {
+        if (!gameActive) return;
+
+        if (timestamp - lastSpawn > spawnInterval) {
+            spawn();
+            lastSpawn = timestamp;
+            if (timeLeft > 15) spawnInterval = 1400 - (15 - (timeLeft - 15)) * 50;
+            else if (timeLeft > 7) spawnInterval = 650 - (8 - (timeLeft - 7)) * 40;
+            else spawnInterval = 140; 
+        }
+
+        const binRect = bin.getBoundingClientRect();
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            item.y += item.speed;
+            item.el.style.top = item.y + 'px';
+            const itemRect = item.el.getBoundingClientRect();
+            const centerX = itemRect.left + (itemRect.width / 2);
+
+            if (itemRect.bottom >= binRect.top && itemRect.bottom <= binRect.top + 50 && 
+                centerX >= binRect.left && centerX <= binRect.right) {
+                if (item.isTarget) {
+                    score += 10;
+                    feedback("+10", "#166534", binRect.left);
+                } else {
+                    score = Math.max(0, score - 25);
+                    feedback("-25 ⚠️", "#b91c1c", binRect.left);
+                }
+                scoreElement.innerText = score;
+                item.el.remove();
+                items.splice(i, 1);
+                continue;
+            }
+            if (item.y > window.innerHeight) {
+                item.el.remove();
+                items.splice(i, 1);
+            }
+        }
+        requestAnimationFrame(update);
+    }
+
+    startBtn.addEventListener('click', startGame);
+    updateLevelUI(); // Init au chargement
+</script>
+</body>
+</html>
