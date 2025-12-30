@@ -63,9 +63,24 @@
             50% { transform: translateX(40px); opacity: 0.8; }
         }
         .hint-wax { animation: hint-side 1.2s infinite ease-in-out; }
+
+        /* Parent timer bar for iframe mode - hidden, we use internal timer only */
+        #parent-timer-bar {
+            display: none;
+        }
+
+        body.in-iframe {
+            margin: 0;
+            padding: 0;
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex flex-col items-center justify-center m-0 p-0 overflow-hidden bg-slate-50">
+
+    <!-- Parent Timer Bar (for iframe mode) -->
+    <div id="parent-timer-bar">
+        <div id="parent-timer-bar-fill"></div>
+    </div>
 
     <!-- UI Overlay -->
     <div id="ui-top" class="fixed top-0 left-0 w-full z-50">
@@ -78,8 +93,8 @@
                 <span id="current-score" class="text-3xl font-black text-slate-900 leading-none mt-1">0</span>
             </div>
             <div class="text-right flex flex-col">
-                <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none">Record</span>
-                <span id="record" class="text-sm font-black text-slate-500 leading-none mt-1">0</span>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none">Tricks</span>
+                <span id="tricks-completed" class="text-sm font-black text-slate-500 leading-none mt-1">0/3</span>
             </div>
         </div>
     </div>
@@ -105,22 +120,75 @@
         const stage = document.getElementById('stage');
         const timerBar = document.getElementById('timer-bar');
         const scoreEl = document.getElementById('current-score');
-        const recordEl = document.getElementById('record');
+        const tricksEl = document.getElementById('tricks-completed');
         const feedbackEl = document.getElementById('feedback');
         const feedbackText = document.getElementById('feedback-text');
         
+        // Iframe mode variables
+        let gameActive = false;
+        let useParentTimer = false;
+        let timeLeft = 0;
+        let totalTime = 0;
+        
+        // Get session number from URL parameter (for multiple sessions)
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionNum = urlParams.get('session') || '1';
+        const gameId = `ride_routine${sessionNum}`;
+        
+        // Per-trick timeout: 5 seconds per trick
+        const TRICK_TIMEOUT_MS = 5000;
+        
         let state = {
             score: 0,
-            record: localStorage.getItem('morningRushRecordV39') || 0,
+            gamesCompleted: 0,
+            maxGames: 3,
             difficulty: 1.0,
             baseTime: 10000, 
             timerInterval: null,
             currentLevelIndex: -1,
             animationId: null,
-            isGameRunning: false
+            isGameRunning: false,
+            trickTimeLeft: TRICK_TIMEOUT_MS,
+            trickTotalTime: TRICK_TIMEOUT_MS
         };
 
-        recordEl.innerText = state.record;
+        tricksEl.innerText = `${state.gamesCompleted}/${state.maxGames}`;
+
+        function updateParentTimerBar() {
+            const timerFill = document.getElementById('parent-timer-bar-fill');
+            if (!timerFill || !useParentTimer) return;
+            
+            const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+            timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+            
+            // Change color when time is running low
+            if (percentage < 20) {
+                timerFill.style.background = '#ff0000';
+            } else if (percentage < 50) {
+                timerFill.style.background = '#ff9800';
+            } else {
+                timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+            }
+        }
+
+        function endGame() {
+            if (!gameActive) return;
+            gameActive = false;
+            state.isGameRunning = false;
+            
+            // Stop all timers and animations
+            if (state.timerInterval) clearInterval(state.timerInterval);
+            if (state.animationId) cancelAnimationFrame(state.animationId);
+            
+            // Notify parent if in iframe
+            if (window.parent !== window) {
+                window.parent.postMessage({ 
+                    type: 'gameComplete', 
+                    game: gameId,
+                    score: state.score 
+                }, '*');
+            }
+        }
 
         function cleanup() {
             state.isGameRunning = false;
@@ -138,23 +206,49 @@
             if (!state.isGameRunning) return;
             state.isGameRunning = false;
             if (state.timerInterval) clearInterval(state.timerInterval);
+            
             if (success) {
                 state.score++;
+                state.gamesCompleted++;
                 scoreEl.classList.add('score-pop');
                 setTimeout(() => scoreEl.classList.remove('score-pop'), 300);
-                if (state.score > state.record) {
-                    state.record = state.score;
-                    localStorage.setItem('morningRushRecordV39', state.record);
-                    recordEl.innerText = state.record;
-                }
+                tricksEl.innerText = `${state.gamesCompleted}/${state.maxGames}`;
                 showFeedback(msg || "BIEN !", "bg-emerald-500");
+                
+                // Check if we've completed maxGames - end early!
+                if (state.gamesCompleted >= state.maxGames) {
+                    setTimeout(() => endGame(), 1300);
+                    return;
+                }
             } else {
-                state.score = 0;
+                // Don't reset score on failure - keep partial points!
+                // state.score stays the same
                 showFeedback(msg || "EPIC FAIL", "bg-rose-600");
             }
+            
             scoreEl.innerText = state.score;
             state.difficulty = 1 + (state.score * 0.05);
-            setTimeout(nextLevel, 1300);
+            
+            // Always check maxGames first - if we've reached it, end game
+            if (state.gamesCompleted >= state.maxGames) {
+                setTimeout(() => endGame(), 1300);
+                return;
+            }
+            
+            // Continue to next trick if:
+            // - We haven't reached maxGames yet (checked above)
+            // - Overall session time hasn't run out (in iframe mode)
+            if (useParentTimer) {
+                if (timeLeft <= 0 && totalTime > 0) {
+                    setTimeout(() => endGame(), 1300);
+                } else {
+                    // Still have time and haven't reached maxGames - continue
+                    setTimeout(nextLevel, 1300);
+                }
+            } else {
+                // Standalone mode - continue to next trick
+                setTimeout(nextLevel, 1300);
+            }
         }
 
         function showFeedback(text, colorClass) {
@@ -167,22 +261,55 @@
         }
 
         function startTimer() {
-            const levelTime = Math.max(3800, state.baseTime - (state.score * 200));
-            let timeLeft = levelTime;
+            // Reset trick timer for this new trick (always 5 seconds per trick)
+            state.trickTimeLeft = state.trickTotalTime;
             timerBar.style.width = '100%';
+            
+            // Start per-trick timer (always use internal timer for individual tricks)
             state.timerInterval = setInterval(() => {
-                timeLeft -= 50;
-                timerBar.style.width = `${(timeLeft / levelTime) * 100}%`;
-                if (timeLeft <= 0) {
+                state.trickTimeLeft -= 50;
+                const percentage = (state.trickTimeLeft / state.trickTotalTime) * 100;
+                timerBar.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+                
+                // Check if this trick timed out
+                if (state.trickTimeLeft <= 0) {
                     clearInterval(state.timerInterval);
+                    // Trick timeout - fail this trick but continue if we haven't reached maxGames
                     updateScore(false, "TROP LENT !");
                 }
             }, 50);
+            
+            // Also update parent timer bar if in iframe mode
+            if (useParentTimer) {
+                updateParentTimerBar();
+                // Check if overall session time has run out
+                if (timeLeft <= 0 && totalTime > 0) {
+                    clearInterval(state.timerInterval);
+                    endGame();
+                    return;
+                }
+            }
         }
 
         function nextLevel() {
+            // Check if game is still active
+            if (!gameActive && useParentTimer) return;
+            
+            // Check if we've reached maxGames
+            if (state.gamesCompleted >= state.maxGames) {
+                endGame();
+                return;
+            }
+            
             cleanup();
             state.isGameRunning = true;
+            
+            // Check overall session time before starting new level in iframe mode
+            if (useParentTimer && timeLeft <= 0 && totalTime > 0) {
+                endGame();
+                return;
+            }
+            
             const levels = [
                 levelBarspin, levelTailwhip, levelOllie, 
                 levelPedal, levelKickflip, levelPump,
@@ -489,9 +616,58 @@
             activeCleanup = () => { stage.removeEventListener('mousemove', mv); stage.removeEventListener('touchmove', mv); };
         }
 
-        document.getElementById('start-btn').addEventListener('click', () => {
-            state.score = 0; scoreEl.innerText = "0"; nextLevel();
-        });
+        // Detect iframe mode and listen for parent messages
+        if (window.parent !== window) {
+            document.body.classList.add('in-iframe');
+            useParentTimer = true;
+            gameActive = true;
+            
+            // Initialize parent timer bar to 100%
+            const timerFill = document.getElementById('parent-timer-bar-fill');
+            if (timerFill) {
+                timerFill.style.width = '100%';
+            }
+            
+            // Listen for messages from parent
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'gameTimeout') {
+                    // Timeout received - end game immediately
+                    if (gameActive) {
+                        timeLeft = 0;
+                        updateScore(false, "TROP LENT !");
+                    }
+                } else if (event.data && event.data.type === 'timeUpdate') {
+                    // Timer update received - update timer bar
+                    timeLeft = event.data.timeLeft;
+                    totalTime = event.data.totalTime;
+                    updateParentTimerBar();
+                    
+                    // End game when time runs out
+                    if (timeLeft <= 0 && totalTime > 0 && state.isGameRunning) {
+                        updateScore(false, "TROP LENT !");
+                    }
+                }
+            });
+            
+            // Auto-start game in iframe mode
+            state.score = 0;
+            state.gamesCompleted = 0;
+            scoreEl.innerText = "0";
+            tricksEl.innerText = "0/3";
+            setTimeout(() => {
+                nextLevel();
+            }, 500);
+        } else {
+            // Standalone mode - use start button
+            document.getElementById('start-btn').addEventListener('click', () => {
+                state.score = 0;
+                state.gamesCompleted = 0;
+                scoreEl.innerText = "0";
+                tricksEl.innerText = "0/3";
+                gameActive = true;
+                nextLevel();
+            });
+        }
     </script>
 </body>
 </html>
