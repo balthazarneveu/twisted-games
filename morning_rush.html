@@ -108,15 +108,29 @@
             animation: big-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
             position: absolute; z-index: 100; font-size: 2.5rem;
         }
+
+        /* Parent timer bar for iframe mode - hidden, we use internal timer only */
+        #parent-timer-bar {
+            display: none;
+        }
+
+        body.in-iframe {
+            margin: 0;
+            padding: 0;
+        }
     </style>
 </head>
 <body class="transition-colors duration-200">
+    <!-- Parent Timer Bar (for iframe mode) -->
+    <div id="parent-timer-bar">
+        <div id="parent-timer-bar-fill"></div>
+    </div>
 
 <div id="app" class="h-screen flex flex-col items-center justify-between py-10 px-6">
     <div class="w-full space-y-4">
         <div class="flex justify-between items-end px-2">
             <div>
-                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">RECORD: <span id="best-score">0</span></div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Tricks: <span id="tricks-completed">0/3</span></div>
                 <div class="text-4xl font-black text-slate-900 italic">SCORE: <span id="score">0</span></div>
             </div>
             <div class="text-xs font-bold text-blue-500 uppercase tracking-widest pb-1">Mode Zen</div>
@@ -152,20 +166,37 @@
     const stage = document.getElementById('stage');
     const instruction = document.getElementById('instruction');
     const scoreEl = document.getElementById('score');
-    const bestScoreEl = document.getElementById('best-score');
+    const tricksEl = document.getElementById('tricks-completed');
     const timerBar = document.getElementById('timer-bar');
     const overlay = document.getElementById('overlay');
     const feedback = document.getElementById('feedback');
     const startBtn = document.getElementById('start-btn');
 
+    // Iframe mode variables
+    let gameActive = false;
+    let useParentTimer = false;
+    let timeLeft = 0;
+    let totalTime = 0;
+    
+    // Get session number from URL parameter (for multiple sessions)
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionNum = urlParams.get('session') || '1';
+    const gameId = `morning_rush${sessionNum}`;
+    
+    // Per-trick timeout: 5 seconds per trick
+    const TRICK_TIMEOUT_MS = 5000;
+
     let game = {
         score: 0,
-        bestScore: 0,
+        gamesCompleted: 0,
+        maxGames: 3,
         active: false,
         timer: null,
         lastLevelIdx: -1,
         cleanup: null,
-        validate: null
+        validate: null,
+        trickTimeLeft: TRICK_TIMEOUT_MS,
+        trickTotalTime: TRICK_TIMEOUT_MS
     };
 
     let activeListeners = [];
@@ -246,22 +277,50 @@
         { title: "AJUSTE LE NOEUD !", init: initTieMatch }
     ];
 
-    startBtn.onclick = () => {
-        overlay.classList.add('hidden');
-        initGame();
-    };
-
     function initGame() {
         game.score = 0;
+        game.gamesCompleted = 0;
         updateHeader();
         startLevel();
     }
 
     function updateHeader() {
         scoreEl.innerText = game.score;
-        if (game.score > game.bestScore) {
-            game.bestScore = game.score;
-            bestScoreEl.innerText = game.bestScore;
+        tricksEl.innerText = `${game.gamesCompleted}/${game.maxGames}`;
+    }
+
+    function updateParentTimerBar() {
+        const timerFill = document.getElementById('parent-timer-bar-fill');
+        if (!timerFill || !useParentTimer) return;
+        
+        const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+        timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+        
+        // Change color when time is running low
+        if (percentage < 20) {
+            timerFill.style.background = '#ff0000';
+        } else if (percentage < 50) {
+            timerFill.style.background = '#ff9800';
+        } else {
+            timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+        }
+    }
+
+    function endGame() {
+        if (!gameActive) return;
+        gameActive = false;
+        game.active = false;
+        
+        // Stop all timers
+        clearInterval(game.timer);
+        
+        // Notify parent if in iframe
+        if (window.parent !== window) {
+            window.parent.postMessage({ 
+                type: 'gameComplete', 
+                game: gameId,
+                score: game.score 
+            }, '*');
         }
     }
 
@@ -290,11 +349,26 @@
     }
 
     function startTimer(duration) {
+        // Reset trick timer for this new trick (always 5 seconds per trick)
+        game.trickTimeLeft = game.trickTotalTime;
+        timerBar.style.width = '100%';
+        
         const start = Date.now();
         game.timer = setInterval(() => {
             const elapsed = Date.now() - start;
             const progress = 100 - (elapsed / duration * 100);
             timerBar.style.width = Math.max(0, progress) + "%";
+            
+            // Also update parent timer bar if in iframe mode
+            if (useParentTimer) {
+                updateParentTimerBar();
+                // Check if overall session time has run out
+                if (timeLeft <= 0 && totalTime > 0) {
+                    clearInterval(game.timer);
+                    endGame();
+                    return;
+                }
+            }
             
             if (elapsed >= duration) {
                 clearInterval(game.timer);
@@ -311,10 +385,18 @@
         game.active = false;
         clearInterval(game.timer);
         game.score++;
+        game.gamesCompleted++;
         updateHeader();
         document.body.classList.add('success-bg');
         feedback.innerText = "PARFAIT !";
         feedback.classList.replace('opacity-0', 'opacity-100');
+        
+        // Check if we've completed maxGames - end early!
+        if (game.gamesCompleted >= game.maxGames) {
+            setTimeout(() => endGame(), 400);
+            return;
+        }
+        
         setTimeout(() => {
             document.body.classList.remove('success-bg');
             startLevel();
@@ -325,11 +407,26 @@
         if (!game.active) return;
         game.active = false;
         clearInterval(game.timer);
-        game.score = 0;
+        // Don't reset score on failure - keep partial points!
+        // game.score stays the same
         updateHeader();
         document.body.classList.add('fail-bg');
         feedback.innerText = msg;
         feedback.classList.replace('opacity-0', 'opacity-100');
+        
+        // Always check maxGames first - if we've reached it, end game
+        if (game.gamesCompleted >= game.maxGames) {
+            setTimeout(() => endGame(), 600);
+            return;
+        }
+        
+        // On failure, check if we should continue or end
+        // If overall session time is up, end the game
+        if (useParentTimer && timeLeft <= 0) {
+            setTimeout(() => endGame(), 600);
+            return;
+        }
+        
         setTimeout(() => {
             document.body.classList.remove('fail-bg');
             startLevel();
@@ -740,6 +837,56 @@
     }
 
     document.addEventListener('touchstart', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
+    // Detect iframe mode and listen for parent messages
+    if (window.parent !== window) {
+        document.body.classList.add('in-iframe');
+        useParentTimer = true;
+        gameActive = true;
+        
+        // Initialize parent timer bar to 100%
+        const timerFill = document.getElementById('parent-timer-bar-fill');
+        if (timerFill) {
+            timerFill.style.width = '100%';
+        }
+        
+        // Listen for messages from parent
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'gameTimeout') {
+                // Timeout received - end game immediately
+                if (gameActive) {
+                    timeLeft = 0;
+                    handleFail("TROP LENT !");
+                }
+            } else if (event.data && event.data.type === 'timeUpdate') {
+                // Timer update received - update timer bar
+                timeLeft = event.data.timeLeft;
+                totalTime = event.data.totalTime;
+                updateParentTimerBar();
+                
+                // End game when time runs out
+                if (timeLeft <= 0 && totalTime > 0 && game.active) {
+                    handleFail("TROP LENT !");
+                }
+            }
+        });
+        
+        // Auto-start game in iframe mode
+        game.score = 0;
+        game.gamesCompleted = 0;
+        updateHeader();
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            initGame();
+        }, 500);
+    } else {
+        // Standalone mode - use start button
+        startBtn.onclick = () => {
+            overlay.classList.add('hidden');
+            gameActive = true;
+            initGame();
+        };
+    }
 </script>
 </body>
 </html>
