@@ -138,14 +138,26 @@
         // Per-trick timeout: 5 seconds per trick
         const TRICK_TIMEOUT_MS = 5000;
         
+        // Session-specific trick orders
+        // Available tricks: levelBarspin, levelTailwhip, levelOllie, levelKickflip, 
+        //                  levelPedal, levelPump, levelScrew, levelWax
+        const SESSION_TRICKS = {
+            '1': [levelPump, levelKickflip, levelPedal],           // Rider Routine 1
+            '2': [levelWax, levelTailwhip, levelScrew],            // Rider Routine 2
+            '3': [levelOllie, levelBarspin, levelTailwhip]         // Rider Routine 3
+        };
+        
+        // Get the trick order for this session (default to session 1 if invalid)
+        const TRICK_ORDER = SESSION_TRICKS[sessionNum] || SESSION_TRICKS['1'];
+        
         let state = {
             score: 0,
             gamesCompleted: 0,
-            maxGames: 3,
+            maxGames: TRICK_ORDER.length, // Automatically set to number of tricks in TRICK_ORDER
             difficulty: 1.0,
             baseTime: 10000, 
             timerInterval: null,
-            currentLevelIndex: -1,
+            currentTrickIndex: 0, // Track which trick we're on (0, 1, 2)
             animationId: null,
             isGameRunning: false,
             trickTimeLeft: TRICK_TIMEOUT_MS,
@@ -214,12 +226,6 @@
                 setTimeout(() => scoreEl.classList.remove('score-pop'), 300);
                 tricksEl.innerText = `${state.gamesCompleted}/${state.maxGames}`;
                 showFeedback(msg || "BIEN !", "bg-emerald-500");
-                
-                // Check if we've completed maxGames - end early!
-                if (state.gamesCompleted >= state.maxGames) {
-                    setTimeout(() => endGame(), 1300);
-                    return;
-                }
             } else {
                 // Don't reset score on failure - keep partial points!
                 // state.score stays the same
@@ -229,20 +235,23 @@
             scoreEl.innerText = state.score;
             state.difficulty = 1 + (state.score * 0.05);
             
-            // Always check maxGames first - if we've reached it, end game
-            if (state.gamesCompleted >= state.maxGames) {
+            // Move to next trick index
+            state.currentTrickIndex++;
+            
+            // Check if we've completed all tricks (3 tricks total)
+            if (state.currentTrickIndex >= TRICK_ORDER.length) {
                 setTimeout(() => endGame(), 1300);
                 return;
             }
             
             // Continue to next trick if:
-            // - We haven't reached maxGames yet (checked above)
+            // - We haven't completed all tricks yet (checked above)
             // - Overall session time hasn't run out (in iframe mode)
             if (useParentTimer) {
                 if (timeLeft <= 0 && totalTime > 0) {
                     setTimeout(() => endGame(), 1300);
                 } else {
-                    // Still have time and haven't reached maxGames - continue
+                    // Still have time and haven't completed all tricks - continue
                     setTimeout(nextLevel, 1300);
                 }
             } else {
@@ -274,7 +283,7 @@
                 // Check if this trick timed out
                 if (state.trickTimeLeft <= 0) {
                     clearInterval(state.timerInterval);
-                    // Trick timeout - fail this trick but continue if we haven't reached maxGames
+                    // Trick timeout - fail this trick but continue to next trick
                     updateScore(false, "TROP LENT !");
                 }
             }, 50);
@@ -295,8 +304,8 @@
             // Check if game is still active
             if (!gameActive && useParentTimer) return;
             
-            // Check if we've reached maxGames
-            if (state.gamesCompleted >= state.maxGames) {
+            // Check if we've completed all tricks (3 tricks total)
+            if (state.currentTrickIndex >= TRICK_ORDER.length) {
                 endGame();
                 return;
             }
@@ -310,15 +319,9 @@
                 return;
             }
             
-            const levels = [
-                levelBarspin, levelTailwhip, levelOllie, 
-                levelPedal, levelKickflip, levelPump,
-                levelScrew, levelWax
-            ];
-            let idx;
-            do { idx = Math.floor(Math.random() * levels.length); } while (idx === state.currentLevelIndex);
-            state.currentLevelIndex = idx;
-            levels[idx]();
+            // Play the next trick in the fixed order
+            const trickFunction = TRICK_ORDER[state.currentTrickIndex];
+            trickFunction();
             startTimer();
         }
 
@@ -444,22 +447,43 @@
                             <div id="skate-target" class="text-[12rem] leading-none relative z-10 drop-shadow-xl">🛹</div>
                         </div>
                     </div>
+                    <div class="mt-8 text-center">
+                        <p class="text-slate-400 font-black uppercase text-xs tracking-widest mb-2">Instructions</p>
+                        <p class="text-slate-500 font-bold text-[10px] tracking-wide">TAPES A DEUX DOIGTS</p>
+                    </div>
                 </div>`;
             const group = document.getElementById('ollie-group'), skate = document.getElementById('skate-target');
             let done = false;
+            const performOllie = () => {
+                if (done) return;
+                done = true; 
+                group.style.transform = "translateY(-220px) rotate(-12deg)"; skate.classList.add('perfect-glow');
+                setTimeout(() => {
+                    group.style.transform = "translateY(0) rotate(0deg)";
+                    setTimeout(() => updateScore(true, "OLLIE !"), 300);
+                }, 400);
+            };
             const handleAction = (e) => {
                 if (done) return;
                 if (((e.touches && e.touches.length) || 0) >= 2 || (e.type === 'mousedown' && e.shiftKey)) {
-                    done = true; 
-                    group.style.transform = "translateY(-220px) rotate(-12deg)"; skate.classList.add('perfect-glow');
-                    setTimeout(() => {
-                        group.style.transform = "translateY(0) rotate(0deg)";
-                        setTimeout(() => updateScore(true, "OLLIE !"), 300);
-                    }, 400);
+                    performOllie();
                 }
             };
-            stage.addEventListener('mousedown', handleAction); stage.addEventListener('touchstart', handleAction, {passive:false});
-            activeCleanup = () => { stage.removeEventListener('mousedown', handleAction); stage.removeEventListener('touchstart', handleAction); };
+            const handleKeyPress = (e) => {
+                if (done) return;
+                if (e.code === 'Space' || e.key === ' ' || e.keyCode === 32) {
+                    e.preventDefault();
+                    performOllie();
+                }
+            };
+            stage.addEventListener('mousedown', handleAction); 
+            stage.addEventListener('touchstart', handleAction, {passive:false});
+            window.addEventListener('keydown', handleKeyPress);
+            activeCleanup = () => { 
+                stage.removeEventListener('mousedown', handleAction); 
+                stage.removeEventListener('touchstart', handleAction);
+                window.removeEventListener('keydown', handleKeyPress);
+            };
         }
 
         function levelKickflip() {
@@ -498,7 +522,20 @@
         }
 
         function levelPedal() {
-            stage.innerHTML = `<div class="flex flex-col items-center gap-10"><div class="text-2xl font-black italic">PÉDALE !</div><div class="flex gap-20"><div id="pL" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm">L</div><div id="pR" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm">R</div></div><div class="w-64 h-6 bg-slate-200 rounded-full overflow-hidden border border-slate-300 shadow-inner"><div id="pB" class="h-full bg-blue-500 w-0 transition-all"></div></div></div>`;
+            stage.innerHTML = `<div class="flex flex-col items-center gap-10">
+                <div class="text-2xl font-black italic">PÉDALE !</div>
+                <div class="flex gap-20">
+                    <div id="pL" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95">L</div>
+                    <div id="pR" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95">R</div>
+                </div>
+                <div class="w-64 h-6 bg-slate-200 rounded-full overflow-hidden border border-slate-300 shadow-inner">
+                    <div id="pB" class="h-full bg-blue-500 w-0 transition-all"></div>
+                </div>
+                <div class="mt-4 text-center">
+                    <p class="text-slate-400 font-black uppercase text-xs tracking-widest mb-2">Instructions</p>
+                    <p class="text-slate-500 font-bold text-[10px] tracking-wide">TAPES A GAUCHE PUIS A DROITE!</p>
+                </div>
+            </div>`;
             const pL = document.getElementById('pL'), pR = document.getElementById('pR'), pB = document.getElementById('pB');
             let last = '', progress = 0;
             const h = (s) => {
@@ -506,8 +543,32 @@
                 const el = s === 'L' ? pL : pR; el.style.background = "#e2e8f0"; setTimeout(() => el.style.background = "#f1f5f9", 100);
                 if (progress >= 100) updateScore(true, "À FOND !");
             };
-            pL.onmousedown = pL.ontouchstart = (e) => { e.preventDefault(); h('L'); };
-            pR.onmousedown = pR.ontouchstart = (e) => { e.preventDefault(); h('R'); };
+            const handleClick = (s, e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                h(s);
+            };
+            pL.onmousedown = pL.ontouchstart = (e) => handleClick('L', e);
+            pR.onmousedown = pR.ontouchstart = (e) => handleClick('R', e);
+            
+            // Keyboard fallback for PC
+            const handleKeyPress = (e) => {
+                const key = e.key.toLowerCase();
+                const code = e.code;
+                if (key === 'a' || key === 'arrowleft' || code === 'KeyA' || code === 'ArrowLeft') {
+                    e.preventDefault();
+                    h('L');
+                } else if (key === 'd' || key === 'arrowright' || code === 'KeyD' || code === 'ArrowRight') {
+                    e.preventDefault();
+                    h('R');
+                }
+            };
+            window.addEventListener('keydown', handleKeyPress);
+            activeCleanup = () => {
+                window.removeEventListener('keydown', handleKeyPress);
+                pL.onmousedown = pL.ontouchstart = null;
+                pR.onmousedown = pR.ontouchstart = null;
+            };
         }
 
         function levelPump() {
@@ -652,8 +713,9 @@
             // Auto-start game in iframe mode
             state.score = 0;
             state.gamesCompleted = 0;
+            state.currentTrickIndex = 0; // Reset to first trick
             scoreEl.innerText = "0";
-            tricksEl.innerText = "0/3";
+            tricksEl.innerText = `0/${state.maxGames}`;
             setTimeout(() => {
                 nextLevel();
             }, 500);
@@ -662,8 +724,9 @@
             document.getElementById('start-btn').addEventListener('click', () => {
                 state.score = 0;
                 state.gamesCompleted = 0;
+                state.currentTrickIndex = 0; // Reset to first trick
                 scoreEl.innerText = "0";
-                tricksEl.innerText = "0/3";
+                tricksEl.innerText = `0/${state.maxGames}`;
                 gameActive = true;
                 nextLevel();
             });

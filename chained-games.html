@@ -379,18 +379,24 @@
         sort3: 5,
         sort4: 5,
         sort5: 5,
-        sort6: 5
+        sort6: 5,
+        ride_routine1: 24,
+        ride_routine2: 20,
+        ride_routine3: 20
     };
 
     // Game session configuration - define the sequence of games to play
     // You can add the same game multiple times by using different instance IDs
     const GAME_SESSION = [
         // { gameId: 'sort', label: 'Speedrun Chronologique' },
+        { gameId: 'ride_routine1', label: 'Rider Routine 1' },
         { gameId: 'resonance', label: 'Resonance 2' },
         { gameId: 'pinball', label: 'Pinball Wizard' },
         // { gameId: 'sort6', label: 'Speedrun: La Journée' },
         { gameId: 'scratchcard_zen', label: 'Zen Garden' },
         { gameId: 'santa', label: 'Jumping Santa' },
+
+        { gameId: 'ride_routine2', label: 'Rider Routine 2' },
         // { gameId: 'sort2', label: 'Speedrun: Reine des Neiges' },
         { gameId: 'recycle1', label: 'Eco-Tri: Compost' },
         { gameId: 'scratchcard_danger', label: 'Danger Zone' },
@@ -403,9 +409,11 @@
         // { gameId: 'sort4', label: 'Speedrun: Histoire de France' },
         { gameId: 'recycle3', label: 'Eco-Tri: Encombrants' },
         { gameId: 'snow', label: 'Snow Ninja' },
+        { gameId: 'ride_routine3', label: 'Rider Routine 3' },
         { gameId: 'scratchcard_final', label: 'Final Hell' },
         // { gameId: 'sort3', label: 'Speedrun: Les Saisons' },
         { gameId: 'recycle2', label: 'Eco-Tri: Recyclage' },
+
     ];
 
     // Game definitions - maps game IDs to their files and settings
@@ -429,7 +437,10 @@
         sort3: { file: 'sort.html?level=2', timeout: GAME_TIMEOUTS.sort3 },
         sort4: { file: 'sort.html?level=3', timeout: GAME_TIMEOUTS.sort4 },
         sort5: { file: 'sort.html?level=4', timeout: GAME_TIMEOUTS.sort5 },
-        sort6: { file: 'sort.html?level=5', timeout: GAME_TIMEOUTS.sort6 }
+        sort6: { file: 'sort.html?level=5', timeout: GAME_TIMEOUTS.sort6 },
+        ride_routine1: { file: 'ride_routine.html?session=1', timeout: GAME_TIMEOUTS.ride_routine1 },
+        ride_routine2: { file: 'ride_routine.html?session=2', timeout: GAME_TIMEOUTS.ride_routine2 },
+        ride_routine3: { file: 'ride_routine.html?session=3', timeout: GAME_TIMEOUTS.ride_routine3 }
     };
 
     // Build games array from session configuration
