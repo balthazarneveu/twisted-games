@@ -172,8 +172,8 @@
             icon: "⚠️",
             desc: "Warning: 3 bombs detected. Foil is clearing faster.",
             bombs: 3,
-            scratchOpacity: 0.55,
-            threshold: 60,
+            scratchOpacity: 1.0,
+            threshold: 15,
             time: 10000,
             danger: "Caution: 3 Bombs"
         };
@@ -400,7 +400,7 @@
             const { x, y } = getCoords(e);
             ctx.globalCompositeOperation = 'destination-out';
             ctx.globalAlpha = LEVEL.scratchOpacity;
-            ctx.lineWidth = 50; ctx.lineCap = 'round';
+            ctx.lineWidth = 90; ctx.lineCap = 'round';
             ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
             lastX = x; lastY = y;
             checkSymbols(x, y);

@@ -172,8 +172,8 @@
             icon: "💀",
             desc: "Total Chaos: 7 bombs. Paper-thin foil. Avoid the red pulse at all costs.",
             bombs: 7,
-            scratchOpacity: 0.95,
-            threshold: 80,
+            scratchOpacity: 1.0,
+            threshold: 15,
             time: 10000,
             danger: "Danger: 7 Bombs"
         };
@@ -400,7 +400,7 @@
             const { x, y } = getCoords(e);
             ctx.globalCompositeOperation = 'destination-out';
             ctx.globalAlpha = LEVEL.scratchOpacity;
-            ctx.lineWidth = 50; ctx.lineCap = 'round';
+            ctx.lineWidth = 90; ctx.lineCap = 'round';
             ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
             lastX = x; lastY = y;
             checkSymbols(x, y);
