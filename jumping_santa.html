@@ -113,11 +113,42 @@
             display: none;
             z-index: 5;
         }
+
+        #timer-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            width: 100%;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        #timer-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff 0%, #00ffff 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        body.in-iframe {
+            margin: 0;
+            padding: 0;
+        }
+
+        body.in-iframe #game-container {
+            width: 100vw;
+            height: 100vh;
+        }
     </style>
 </head>
 <body>
 
 <div id="game-container">
+    <div id="timer-bar">
+        <div id="timer-bar-fill"></div>
+    </div>
     <div id="slowmo-vignette"></div>
     <canvas id="gameCanvas"></canvas>
     
@@ -162,6 +193,10 @@
     const slowMoMax = 180;
     let invuln = 0;
     let gameTimeRemaining = 30;
+    let gameActive = false;
+    let useParentTimer = false;
+    let timeLeft = 0;
+    let totalTime = 0;
 
     // SANTA : Physique ajustée pour des sauts plus hauts
     const SANTA = { 
@@ -205,12 +240,34 @@
         updateUI();
     }
 
+    function updateTimerBar() {
+        const timerFill = document.getElementById('timer-bar-fill');
+        if (!timerFill) return;
+        
+        const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+        timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+        
+        if (percentage < 20) {
+            timerFill.style.background = '#ff0000';
+        } else if (percentage < 50) {
+            timerFill.style.background = '#ff9800';
+        } else {
+            timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+        }
+    }
+
     function updateUI() {
         document.getElementById('lives-display').innerText = '❤️'.repeat(lives);
         document.getElementById('score-display').innerText = `Score : ${score}`;
         document.getElementById('dist-display').innerText = `${Math.floor(distance)} m`;
-        timeFill.style.width = (gameTimeRemaining / 30) * 100 + '%';
-        document.getElementById('mission-text').innerText = `TEMPS : ${Math.ceil(gameTimeRemaining)}s`;
+        
+        if (useParentTimer) {
+            updateTimerBar();
+            document.getElementById('mission-text').innerText = `TEMPS : ${Math.ceil(timeLeft)}s`;
+        } else {
+            timeFill.style.width = (gameTimeRemaining / 30) * 100 + '%';
+            document.getElementById('mission-text').innerText = `TEMPS : ${Math.ceil(gameTimeRemaining)}s`;
+        }
     }
 
     function jump() {
@@ -224,20 +281,58 @@
         if(e.target.tagName !== 'BUTTON') { jump(); e.preventDefault(); }
     }, { passive: false });
 
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.key === ' ') {
+            e.preventDefault();
+            jump();
+        }
+    });
+
+    function endGame() {
+        if (!gameActive) return;
+        gameActive = false;
+        state = 'GAMEOVER';
+        
+        // Notify parent if in iframe
+        if (window.parent !== window) {
+            window.parent.postMessage({ 
+                type: 'gameComplete', 
+                game: 'santa', 
+                score: score 
+            }, '*');
+        }
+        
+        overlay.style.display = 'flex';
+        document.getElementById('main-title').innerText = "MISSION TERMINÉE ! 🎁";
+        document.getElementById('stats-summary').innerText = `Points : ${score}`;
+        document.getElementById('play-btn').innerText = "RECOMMENCER";
+    }
+
     playBtn.addEventListener('click', () => {
         overlay.style.display = 'none';
         state = 'PLAYING';
+        gameActive = true;
         init();
     });
 
     function update() {
-        if (state !== 'PLAYING') return;
+        if (state !== 'PLAYING' || !gameActive) return;
 
         let isSlow = slowMoTimer > 0;
         let timeScale = isSlow ? 0.38 : 1.0;
         
-        gameTimeRemaining -= (1/60);
-        if (gameTimeRemaining <= 0) finishGame("MISSION ACCOMPLIE ! 🎁");
+        if (useParentTimer) {
+            if (timeLeft <= 0 && totalTime > 0) {
+                endGame();
+                return;
+            }
+        } else {
+            gameTimeRemaining -= (1/60);
+            if (gameTimeRemaining <= 0) {
+                finishGame("MISSION ACCOMPLIE ! 🎁");
+                return;
+            }
+        }
 
         if (isSlow) {
             slowMoTimer--;
@@ -322,14 +417,67 @@
     }
 
     function finishGame(title) {
+        if (!gameActive) return;
+        gameActive = false;
         state = 'GAMEOVER';
+        
+        // Notify parent if in iframe
+        if (window.parent !== window) {
+            window.parent.postMessage({ 
+                type: 'gameComplete', 
+                game: 'santa', 
+                score: score 
+            }, '*');
+        }
+        
         overlay.style.display = 'flex';
         document.getElementById('main-title').innerText = title;
         document.getElementById('stats-summary').innerText = `Points : ${score}`;
         document.getElementById('play-btn').innerText = "RECOMMENCER";
     }
 
+    // Detect iframe mode and listen for parent messages
+    if (window.parent !== window) {
+        document.body.classList.add('in-iframe');
+        useParentTimer = true;
+        gameActive = true;
+        
+        // Initialize timer bar to 100%
+        const timerFill = document.getElementById('timer-bar-fill');
+        if (timerFill) {
+            timerFill.style.width = '100%';
+        }
+        
+        // Hide overlay and start immediately in iframe mode
+        overlay.style.display = 'none';
+        state = 'PLAYING';
+        init();
+        
+        // Listen for messages from parent
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'gameTimeout') {
+                // Timeout received - end game immediately
+                if (gameActive) {
+                    timeLeft = 0;
+                    endGame();
+                }
+            } else if (event.data && event.data.type === 'timeUpdate') {
+                // Timer update received - update timer bar
+                timeLeft = event.data.timeLeft;
+                totalTime = event.data.totalTime;
+                updateTimerBar();
+                
+                // End game when time runs out
+                if (timeLeft <= 0 && totalTime > 0) {
+                    endGame();
+                }
+            }
+        });
+    }
+
     function draw() {
+        if (!gameActive && state === 'GAMEOVER') return;
+        
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const ground = canvas.height - 100;
 
@@ -379,10 +527,20 @@
         
         ctx.restore();
 
-        requestAnimationFrame(() => { update(); draw(); });
+        if (gameActive || state === 'MENU') {
+            requestAnimationFrame(() => { update(); draw(); });
+        }
     }
 
-    draw();
+    if (window.parent === window) {
+        // Only draw if not in iframe (standalone mode)
+        draw();
+    } else {
+        // In iframe mode, start after a brief delay to ensure message listener is set up
+        setTimeout(() => {
+            draw();
+        }, 100);
+    }
 </script>
 </body>
 </html>

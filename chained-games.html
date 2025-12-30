@@ -246,12 +246,22 @@
         recycle2: 8,
         recycle3: 8,
         pizza: 12,
-        zen: 12
+        zen: 12,
+        santa: 10,
+        scratchcard_zen: 15,
+        scratchcard_danger: 10,
+        scratchcard_minefield: 10,
+        scratchcard_final: 10
     };
 
     // Game session configuration - define the sequence of games to play
     // You can add the same game multiple times by using different instance IDs
     const GAME_SESSION = [
+        { gameId: 'scratchcard_zen', label: 'Zen Garden' },
+        { gameId: 'santa', label: 'Jumping Santa' },
+        { gameId: 'scratchcard_danger', label: 'Danger Zone' },
+        { gameId: 'scratchcard_minefield', label: 'Minefield' },
+        { gameId: 'scratchcard_final', label: 'Final Hell' },
         { gameId: 'pizza', label: 'Pizza Stack Panic' },
         { gameId: 'recycle1', label: 'Eco-Tri: Compost' },
         { gameId: 'zen', label: 'Sérénité Absolue' },
@@ -272,7 +282,12 @@
         recycle2: { file: 'recycle.html?level=2', timeout: GAME_TIMEOUTS.recycle2 },
         recycle3: { file: 'recycle.html?level=3', timeout: GAME_TIMEOUTS.recycle3 },
         pizza: { file: 'pizza.html', timeout: GAME_TIMEOUTS.pizza },
-        zen: { file: 'zen_browser.html', timeout: GAME_TIMEOUTS.zen }
+        zen: { file: 'zen_browser.html', timeout: GAME_TIMEOUTS.zen },
+        santa: { file: 'jumping_santa.html', timeout: GAME_TIMEOUTS.santa },
+        scratchcard_zen: { file: 'scratchcard_zen.html', timeout: GAME_TIMEOUTS.scratchcard_zen },
+        scratchcard_danger: { file: 'scratchcard_danger.html', timeout: GAME_TIMEOUTS.scratchcard_danger },
+        scratchcard_minefield: { file: 'scratchcard_minefield.html', timeout: GAME_TIMEOUTS.scratchcard_minefield },
+        scratchcard_final: { file: 'scratchcard_final.html', timeout: GAME_TIMEOUTS.scratchcard_final }
     };
 
     // Build games array from session configuration

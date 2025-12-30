@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scratch Card - Final Hell</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            touch-action: none;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: system-ui, -apple-system, sans-serif;
+            color: white;
+        }
+        body.in-iframe {
+            margin: 0;
+            padding: 0;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #timer-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            width: 100%;
+            z-index: 1000;
+            overflow: hidden;
+        }
+        #timer-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff 0%, #00ffff 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+        #board-frame {
+            position: relative;
+            width: 320px;
+            height: 320px;
+            border-radius: 24px;
+            background: #111;
+            box-shadow: 0 0 0 6px #1a1a1a, 0 30px 60px rgba(0,0,0,0.8);
+            overflow: hidden;
+        }
+        #prize-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background: radial-gradient(circle at center, #1a1a1a 0%, #111 100%);
+        }
+        canvas {
+            position: relative;
+            z-index: 10;
+            display: block;
+            touch-action: none;
+        }
+        .ui-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            background: rgba(0,0,0,0.96);
+            backdrop-filter: blur(15px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .hidden-ui {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(1.05);
+        }
+        .prize-float {
+            position: absolute;
+            pointer-events: none;
+            animation: float-up 0.8s ease-out forwards;
+            font-weight: 900;
+            z-index: 50;
+        }
+        .float-plus { color: #fbbf24; text-shadow: 0 0 10px rgba(251, 191, 36, 0.6); }
+        .float-minus { color: #ef4444; text-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }
+
+        @keyframes float-up {
+            0% { transform: translateY(0) scale(1); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: translateY(-70px) scale(1.4); opacity: 0; }
+        }
+
+        .bomb-shake {
+            animation: shake-screen 0.4s cubic-bezier(.36,.07,.19,.97) both;
+            background-color: #450a0a !important;
+        }
+
+        @keyframes shake-screen {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+            40%, 60% { transform: translate3d(6px, 0, 0); }
+        }
+
+        .bomb-warning {
+            filter: drop-shadow(0 0 15px rgba(255, 0, 0, 0.8)) !important;
+            animation: pulse-red 1.5s infinite ease-in-out;
+        }
+        @keyframes pulse-red {
+            0%, 100% { opacity: 0.1; transform: translate(-50%, -50%) scale(0.9); }
+            50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        .collected-prize {
+            filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.4)) brightness(1.2) !important;
+            transform: translate(-50%, -50%) scale(1.1) !important;
+            opacity: 1 !important;
+        }
+        .exploded-bomb {
+            filter: grayscale(1) brightness(0.2) !important;
+            transform: translate(-50%, -50%) scale(0.7) !important;
+            opacity: 0.8 !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="timer-bar">
+            <div id="timer-bar-fill"></div>
+        </div>
+        <!-- Header -->
+        <div class="absolute top-8 w-full max-w-[320px] flex justify-between items-end px-2 z-20">
+            <div>
+                <p id="level-indicator" class="text-[10px] uppercase font-black tracking-[0.2em] text-yellow-500 mb-1">LEVEL 4: FINAL</p>
+                <div id="total-score" class="text-4xl font-black text-white">$0</div>
+            </div>
+            <div id="timer-display" class="text-3xl font-black tabular-nums bg-white/5 px-4 py-2 rounded-xl border border-white/10">
+                15.00
+            </div>
+        </div>
+
+        <!-- The Board -->
+        <div id="board-frame">
+            <div id="prize-layer"></div>
+            <canvas id="scratch-canvas" width="320" height="320"></canvas>
+        </div>
+
+        <div id="danger-bar" class="mt-8 flex items-center gap-2 px-4 py-2 rounded-full border border-white/5 opacity-40">
+            <span id="danger-icon">💀</span>
+            <p id="danger-text" class="text-[10px] font-bold uppercase tracking-wider text-white/60">Danger: 7 Bombs</p>
+        </div>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('scratch-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const prizeLayer = document.getElementById('prize-layer');
+        const scoreDisplay = document.getElementById('total-score');
+        const timerDisplay = document.getElementById('timer-display');
+
+        const LEVEL = {
+            name: "Final Hell",
+            icon: "💀",
+            desc: "Total Chaos: 7 bombs. Paper-thin foil. Avoid the red pulse at all costs.",
+            bombs: 7,
+            scratchOpacity: 0.95,
+            threshold: 80,
+            time: 10000,
+            danger: "Danger: 7 Bombs"
+        };
+
+        let state = 'READY';
+        let startTime = 0;
+        let totalScore = 0;
+        let symbols = [];
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+        let gameActive = false;
+        let useParentTimer = false;
+        let timeLeft = 0;
+        let totalTime = 0;
+
+        function updateTimerBar() {
+            const timerFill = document.getElementById('timer-bar-fill');
+            if (!timerFill) return;
+            
+            const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+            timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+            
+            if (percentage < 20) {
+                timerFill.style.background = '#ff0000';
+            } else if (percentage < 50) {
+                timerFill.style.background = '#ff9800';
+            } else {
+                timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+            }
+        }
+
+        function endGame() {
+            if (!gameActive) return;
+            gameActive = false;
+            state = 'ENDED';
+            isDrawing = false;
+            
+            // Notify parent if in iframe
+            if (window.parent !== window) {
+                window.parent.postMessage({ 
+                    type: 'gameComplete', 
+                    game: 'scratchcard_final', 
+                    score: totalScore 
+                }, '*');
+            }
+        }
+
+        function initLevel() {
+            document.getElementById('level-indicator').textContent = `Level 4: ${LEVEL.name}`;
+            document.getElementById('danger-icon').textContent = LEVEL.icon;
+            document.getElementById('danger-text').textContent = LEVEL.danger;
+            document.getElementById('danger-bar').style.opacity = "1";
+            
+            timerDisplay.textContent = (LEVEL.time / 1000).toFixed(2);
+            timerDisplay.classList.remove('text-red-500');
+            
+            drawFoil();
+            generateSymbols();
+        }
+
+        function drawFoil() {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 1.0;
+            ctx.clearRect(0, 0, 320, 320);
+
+            const grad = ctx.createLinearGradient(0, 0, 320, 320);
+            grad.addColorStop(0, '#444');
+            grad.addColorStop(0.5, '#777');
+            grad.addColorStop(1, '#444');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 320, 320);
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<=320; i+=40) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 320); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(320, i); ctx.stroke();
+            }
+        }
+
+        function generateSymbols() {
+            prizeLayer.innerHTML = '';
+            symbols = [];
+            const totalCells = 16;
+            const cellSize = 80;
+            
+            const indices = Array.from({length: totalCells}, (_, i) => i).sort(() => Math.random() - 0.5);
+            const bombIndices = indices.slice(0, LEVEL.bombs);
+
+            for (let i = 0; i < totalCells; i++) {
+                const row = Math.floor(i / 4);
+                const col = i % 4;
+                const x = (col * cellSize) + (cellSize / 2);
+                const y = (row * cellSize) + (cellSize / 2);
+
+                const isBomb = bombIndices.includes(i);
+                const icon = isBomb ? '💣' : ['💰', '💎', '⭐', '🍀', '🏆', '🎁', '🔥', '✨'][Math.floor(Math.random() * 8)];
+                
+                const el = document.createElement('div');
+                el.className = `absolute flex flex-col items-center justify-center transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 opacity-0 pointer-events-none ${isBomb ? 'bomb-warning' : ''}`;
+                el.style.left = `${x}px`;
+                el.style.top = `${y}px`;
+                el.innerHTML = `<span class="text-4xl filter drop-shadow-md">${icon}</span>`;
+                
+                prizeLayer.appendChild(el);
+                symbols.push({ x, y, value: isBomb ? -500 : 100, element: el, collected: false, isBomb });
+            }
+        }
+
+        function startLevel() {
+            if (state === 'SCRATCHING' || state === 'ENDED') return;
+            state = 'SCRATCHING';
+            gameActive = true;
+            startTime = Date.now();
+            requestAnimationFrame(updateLoop);
+        }
+
+        function updateLoop() {
+            if (state !== 'SCRATCHING' || !gameActive) return;
+            
+            if (useParentTimer) {
+                if (timeLeft <= 0 && totalTime > 0) {
+                    completeLevel();
+                    return;
+                }
+                timerDisplay.textContent = timeLeft.toFixed(2);
+                if (timeLeft < 3) timerDisplay.classList.add('text-red-500');
+                updateTimerBar();
+            } else {
+                const elapsed = Date.now() - startTime;
+                const remaining = Math.max(0, LEVEL.time - elapsed);
+                
+                timerDisplay.textContent = (remaining / 1000).toFixed(2);
+                if (remaining < 3000) timerDisplay.classList.add('text-red-500');
+
+                if (remaining <= 0) {
+                    completeLevel();
+                    return;
+                }
+            }
+            
+            requestAnimationFrame(updateLoop);
+        }
+
+        function completeLevel() {
+            endGame();
+            confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+        }
+
+        function triggerExplosion(p) {
+            p.collected = true;
+            totalScore += p.value;
+            scoreDisplay.textContent = `$${totalScore}`;
+            p.element.classList.remove('bomb-warning');
+            p.element.classList.add('exploded-bomb');
+            document.body.classList.add('bomb-shake');
+            setTimeout(() => document.body.classList.remove('bomb-shake'), 400);
+
+            if (navigator.vibrate) navigator.vibrate([150, 100, 150]);
+            confetti({
+                particleCount: 50, colors: ['#ff0000', '#000000'], scalar: 1.5,
+                origin: { x: (canvas.offsetLeft + p.x) / window.innerWidth, y: (canvas.offsetTop + p.y) / window.innerHeight }
+            });
+            createFloater(p, `-$500`, 'float-minus');
+        }
+
+        function triggerPrize(p) {
+            p.collected = true;
+            totalScore += p.value;
+            scoreDisplay.textContent = `$${totalScore}`;
+            p.element.classList.add('collected-prize');
+            if (navigator.vibrate) navigator.vibrate(30);
+
+            confetti({
+                particleCount: 20, colors: ['#fbbf24', '#ffffff'], scalar: 0.8,
+                origin: { x: (canvas.offsetLeft + p.x) / window.innerWidth, y: (canvas.offsetTop + p.y) / window.innerHeight }
+            });
+            createFloater(p, `+$100`, 'float-plus');
+        }
+
+        function createFloater(p, text, className) {
+            const floater = document.createElement('div');
+            floater.className = `prize-float ${className}`;
+            floater.style.left = `${p.x}px`;
+            floater.style.top = `${p.y}px`;
+            floater.textContent = text;
+            document.getElementById('board-frame').appendChild(floater);
+            setTimeout(() => floater.remove(), 800);
+        }
+
+        function checkSymbols(x, y) {
+            symbols.forEach(p => {
+                if (p.collected) return;
+                if (Math.hypot(p.x - x, p.y - y) < 45) {
+                    const alpha = ctx.getImageData(p.x, p.y, 1, 1).data[3];
+                    if (alpha < LEVEL.threshold) {
+                        if (p.isBomb) triggerExplosion(p);
+                        else triggerPrize(p);
+                    } else if (alpha < 230) {
+                        p.element.style.opacity = (1 - (alpha / 255)).toFixed(2);
+                    }
+                }
+            });
+        }
+
+        function getCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        function handleScratch(e) {
+            if (state !== 'SCRATCHING' || !isDrawing) return;
+            const { x, y } = getCoords(e);
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.globalAlpha = LEVEL.scratchOpacity;
+            ctx.lineWidth = 50; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
+            lastX = x; lastY = y;
+            checkSymbols(x, y);
+        }
+
+        canvas.addEventListener('mousedown', (e) => { 
+            isDrawing = true; 
+            const c = getCoords(e); lastX = c.x; lastY = c.y; 
+            handleScratch(e); 
+        });
+        canvas.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            isDrawing = true; 
+            const c = getCoords(e); lastX = c.x; lastY = c.y; 
+            handleScratch(e); 
+        }, { passive: false });
+
+        window.addEventListener('mousemove', handleScratch);
+        window.addEventListener('touchmove', handleScratch, { passive: false });
+        window.addEventListener('mouseup', () => isDrawing = false);
+        window.addEventListener('touchend', () => isDrawing = false);
+
+        // Detect iframe mode and listen for parent messages
+        if (window.parent !== window) {
+            document.body.classList.add('in-iframe');
+            useParentTimer = true;
+            gameActive = true;
+            
+            // Initialize timer bar to 100%
+            const timerFill = document.getElementById('timer-bar-fill');
+            if (timerFill) {
+                timerFill.style.width = '100%';
+            }
+            
+            // Start immediately in iframe mode
+            state = 'SCRATCHING';
+            initLevel();
+            startLevel();
+            
+            // Listen for messages from parent
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'gameTimeout') {
+                    // Timeout received - end game immediately
+                    if (gameActive) {
+                        timeLeft = 0;
+                        endGame();
+                    }
+                } else if (event.data && event.data.type === 'timeUpdate') {
+                    // Timer update received - update timer bar
+                    timeLeft = event.data.timeLeft;
+                    totalTime = event.data.totalTime;
+                    updateTimerBar();
+                    
+                    // End game when time runs out
+                    if (timeLeft <= 0 && totalTime > 0) {
+                        endGame();
+                    }
+                }
+            });
+        } else {
+            // Standalone mode - also auto-start
+            initLevel();
+            startLevel();
+        }
+    </script>
+</body>
+</html>
+
