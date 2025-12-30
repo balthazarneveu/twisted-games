@@ -281,8 +281,14 @@
             score = 0;
         }
         
-        // Stop game loop
+        // Stop game loop and remove shake animation
         clearInterval(loop);
+        const viewport = document.getElementById('app-container');
+        viewport.classList.remove('shake');
+        const halo = document.getElementById('stress-halo');
+        halo.classList.remove('heavy-stress');
+        game.popupActive = false;
+        document.getElementById('error-popup').classList.add('hidden');
         
         // Notify parent if in iframe
         if (window.parent !== window) {
@@ -308,6 +314,15 @@
         game.popupActive = false;
         score = 0;
         confettiParticles = [];
+        
+        // Reset all visual effects
+        const viewport = document.getElementById('app-container');
+        viewport.classList.remove('shake');
+        const halo = document.getElementById('stress-halo');
+        halo.classList.remove('heavy-stress');
+        halo.style.opacity = 0;
+        const stressBar = document.getElementById('stress-bar');
+        stressBar.style.width = '0%';
         
         document.getElementById('error-popup').classList.add('hidden');
         document.getElementById('screen-start').classList.add('hidden');
@@ -419,6 +434,13 @@
     function finish(isWin) {
         game.active = false;
         game.popupActive = false;
+        
+        // Stop game loop and remove shake animation
+        clearInterval(loop);
+        const viewport = document.getElementById('app-container');
+        viewport.classList.remove('shake');
+        const halo = document.getElementById('stress-halo');
+        halo.classList.remove('heavy-stress');
         
         // If in iframe mode, use endGame instead
         if (window.parent !== window && useParentTimer) {
