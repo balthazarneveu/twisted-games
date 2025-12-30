@@ -113,11 +113,44 @@
             width: 80%;
             max-width: 300px;
         }
+
+        /* Timer bar for chained games */
+        #timer-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            width: 100%;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        #timer-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff 0%, #00ffff 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        /* Fullscreen CSS for iframe mode */
+        body.in-iframe {
+            margin: 0;
+            padding: 0;
+        }
+
+        body.in-iframe .viewport {
+            max-width: 100vw;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
 
 <div class="viewport" id="app-container">
+    <div id="timer-bar">
+        <div id="timer-bar-fill"></div>
+    </div>
     <canvas id="confetti-canvas"></canvas>
     <div id="stress-halo"></div>
 
@@ -203,12 +236,66 @@
     const canvas = document.getElementById('confetti-canvas');
     const ctx = canvas.getContext('2d');
 
+    // Chained games integration variables
+    let useParentTimer = false;
+    let timeLeft = 0;
+    let totalTime = 0;
+    let score = 0;
+
     function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     }
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
+
+    function updateTimerBar() {
+        const timerFill = document.getElementById('timer-bar-fill');
+        if (!timerFill) return;
+        
+        const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+        timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+        
+        // Change color when time is running low
+        if (percentage < 20) {
+            timerFill.style.background = '#ff0000';
+        } else if (percentage < 50) {
+            timerFill.style.background = '#ff9800';
+        } else {
+            timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+        }
+    }
+
+    function endGame() {
+        if (!game.active) return;
+        game.active = false;
+        
+        // Calculate score: win = 100 + bonus for low stress and time remaining, lose = 0
+        if (game.stress < 100 && game.time > 0) {
+            // Win condition
+            const stressBonus = Math.max(0, 100 - game.stress);
+            const timeBonus = useParentTimer ? (timeLeft / totalTime) * 50 : (game.time / 10) * 50;
+            score = Math.round(100 + stressBonus + timeBonus);
+        } else {
+            // Lose condition
+            score = 0;
+        }
+        
+        // Stop game loop
+        clearInterval(loop);
+        
+        // Notify parent if in iframe
+        if (window.parent !== window) {
+            window.parent.postMessage({ 
+                type: 'gameComplete', 
+                game: 'zen',
+                score: score 
+            }, '*');
+        } else {
+            // Standalone mode - show result screen
+            finish(score > 0);
+        }
+    }
 
     function launchGame() {
         game.lang = 'zh';
@@ -219,6 +306,7 @@
         game.time = 10.0;
         game.active = true;
         game.popupActive = false;
+        score = 0;
         confettiParticles = [];
         
         document.getElementById('error-popup').classList.add('hidden');
@@ -243,7 +331,14 @@
             btn.className = "btn-game";
             if (i === winPos) {
                 btn.innerText = dict.win;
-                btn.onclick = (e) => { e.stopPropagation(); finish(true); };
+                btn.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    if (window.parent !== window && useParentTimer) {
+                        endGame();
+                    } else {
+                        finish(true);
+                    }
+                };
             } else {
                 btn.innerText = dict.others[Math.floor(Math.random() * dict.others.length)];
                 btn.onclick = (e) => { 
@@ -270,9 +365,23 @@
         clearInterval(loop);
         loop = setInterval(() => {
             if (game.active) {
-                game.time -= 0.01;
-                if (game.time <= 0) finish(false);
-                document.getElementById('timer').innerText = game.time.toFixed(2);
+                // Use parent timer if in iframe, otherwise use local timer
+                if (useParentTimer) {
+                    if (timeLeft <= 0 && totalTime > 0) {
+                        endGame();
+                        return;
+                    }
+                    // Display parent timer
+                    document.getElementById('timer').innerText = timeLeft.toFixed(2);
+                    updateTimerBar();
+                } else {
+                    game.time -= 0.01;
+                    if (game.time <= 0) {
+                        finish(false);
+                        return;
+                    }
+                    document.getElementById('timer').innerText = game.time.toFixed(2);
+                }
                 
                 // On ne récupère du stress que si le popup n'est pas là
                 if (!game.popupActive) {
@@ -280,7 +389,10 @@
                 }
                 
                 updateStressVisuals();
-                if (game.stress >= 100) finish(false);
+                if (game.stress >= 100) {
+                    finish(false);
+                    return;
+                }
             }
             if (confettiParticles.length > 0) updateConfetti();
         }, 10);
@@ -307,6 +419,13 @@
     function finish(isWin) {
         game.active = false;
         game.popupActive = false;
+        
+        // If in iframe mode, use endGame instead
+        if (window.parent !== window && useParentTimer) {
+            endGame();
+            return;
+        }
+        
         const screen = document.getElementById('screen-result');
         const title = document.getElementById('result-title');
         const desc = document.getElementById('result-desc');
@@ -370,6 +489,47 @@
         if (speed > 40) game.stress += (speed / 10);
         game.lastScroll = e.target.scrollTop;
     });
+
+    // Detect iframe mode and listen for parent messages
+    if (window.parent !== window) {
+        document.body.classList.add('in-iframe');
+        useParentTimer = true;
+        
+        // Hide start screen in iframe mode
+        document.getElementById('screen-start').classList.add('hidden');
+        
+        // Initialize timer bar to 100%
+        const timerFill = document.getElementById('timer-bar-fill');
+        if (timerFill) {
+            timerFill.style.width = '100%';
+        }
+        
+        // Auto-start game when in iframe mode
+        setTimeout(() => {
+            launchGame();
+        }, 100);
+        
+        // Listen for messages from parent
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'gameTimeout') {
+                // Timeout received - end game immediately
+                if (game.active) {
+                    timeLeft = 0;
+                    endGame();
+                }
+            } else if (event.data && event.data.type === 'timeUpdate') {
+                // Timer update received - update timer bar
+                timeLeft = event.data.timeLeft;
+                totalTime = event.data.totalTime;
+                updateTimerBar();
+                
+                // End game when time runs out
+                if (timeLeft <= 0 && totalTime > 0 && game.active) {
+                    endGame();
+                }
+            }
+        });
+    }
 
 </script>
 </body>
