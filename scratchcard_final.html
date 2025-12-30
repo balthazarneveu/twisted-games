@@ -414,47 +414,56 @@
         window.addEventListener('mouseup', () => isDrawing = false);
         window.addEventListener('touchend', () => isDrawing = false);
 
-        // Detect iframe mode and listen for parent messages
-        if (window.parent !== window) {
-            document.body.classList.add('in-iframe');
-            useParentTimer = true;
-            gameActive = true;
-            
-            // Initialize timer bar to 100%
-            const timerFill = document.getElementById('timer-bar-fill');
-            if (timerFill) {
-                timerFill.style.width = '100%';
-            }
-            
-            // Start immediately in iframe mode
-            state = 'SCRATCHING';
-            initLevel();
-            startLevel();
-            
-            // Listen for messages from parent
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'gameTimeout') {
-                    // Timeout received - end game immediately
-                    if (gameActive) {
-                        timeLeft = 0;
-                        endGame();
-                    }
-                } else if (event.data && event.data.type === 'timeUpdate') {
-                    // Timer update received - update timer bar
-                    timeLeft = event.data.timeLeft;
-                    totalTime = event.data.totalTime;
-                    updateTimerBar();
-                    
-                    // End game when time runs out
-                    if (timeLeft <= 0 && totalTime > 0) {
-                        endGame();
-                    }
+        function startGame() {
+            // Detect iframe mode and listen for parent messages
+            if (window.parent !== window) {
+                document.body.classList.add('in-iframe');
+                useParentTimer = true;
+                gameActive = true;
+                
+                // Initialize timer bar to 100%
+                const timerFill = document.getElementById('timer-bar-fill');
+                if (timerFill) {
+                    timerFill.style.width = '100%';
                 }
-            });
+                
+                // Start immediately in iframe mode
+                state = 'SCRATCHING';
+                initLevel();
+                startLevel();
+                
+                // Listen for messages from parent
+                window.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'gameTimeout') {
+                        // Timeout received - end game immediately
+                        if (gameActive) {
+                            timeLeft = 0;
+                            endGame();
+                        }
+                    } else if (event.data && event.data.type === 'timeUpdate') {
+                        // Timer update received - update timer bar
+                        timeLeft = event.data.timeLeft;
+                        totalTime = event.data.totalTime;
+                        updateTimerBar();
+                        
+                        // End game when time runs out
+                        if (timeLeft <= 0 && totalTime > 0) {
+                            endGame();
+                        }
+                    }
+                });
+            } else {
+                // Standalone mode - also auto-start
+                initLevel();
+                startLevel();
+            }
+        }
+        
+        // Wait for DOM to be ready before starting
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(startGame, 50);
         } else {
-            // Standalone mode - also auto-start
-            initLevel();
-            startLevel();
+            window.addEventListener('DOMContentLoaded', () => setTimeout(startGame, 50));
         }
     </script>
 </body>
