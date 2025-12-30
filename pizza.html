@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pizza Stack Panic - Équilibre Expert</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #FFD700; /* Jaune Fromage */
+            font-family: 'Fredoka One', cursive;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .hud-bar {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 24px;
+            color: #D32F2F;
+            text-shadow: 2px 2px 0px #fff;
+        }
+
+        #timer-display {
+            color: #fff;
+            background: #D32F2F;
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: 3px solid #fff;
+        }
+
+        /* Effet de panique visuel */
+        .panic-mode {
+            animation: panic-flash 0.3s infinite alternate;
+        }
+
+        @keyframes panic-flash {
+            from { background-color: #FFD700; }
+            to { background-color: #FF8888; }
+        }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+            pointer-events: auto;
+            transition: opacity 0.3s;
+        }
+
+        .hidden { opacity: 0; pointer-events: none; }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+            color: #FFD700;
+            text-shadow: 4px 4px 0px #D32F2F;
+            text-align: center;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: 4px solid #fff;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-family: 'Fredoka One', cursive;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #2E7D32;
+            transition: transform 0.1s;
+        }
+
+        button:active { transform: translateY(4px); box-shadow: 0 2px 0 #2E7D32; }
+        
+        #panic-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: red;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body id="game-body">
+
+    <div id="panic-overlay"></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="hud-bar" id="hud">
+            <div>PIZZAS: <span id="score">0</span></div>
+            <div id="timer-display">00:30</div>
+        </div>
+    </div>
+
+    <div id="start-screen" class="screen">
+        <h1>PIZZA<br>STACK<br>PANIC</h1>
+        <p>Empilez les boîtes, peu importe leur taille !</p>
+        <p><small>Astuce : Centrez bien les grandes boîtes sur les petites.</small></p>
+        <button id="start-btn">LIVRER !</button>
+    </div>
+
+    <div id="game-over-screen" class="screen hidden">
+        <h1 id="go-title">FIN DE SERVICE !</h1>
+        <p>Hauteur finale : <span id="final-score">0</span> pizzas livrées.</p>
+        <button id="restart-btn">RECOMMENCER</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const timerEl = document.getElementById('timer-display');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreEl = document.getElementById('final-score');
+        const gameBody = document.getElementById('game-body');
+        const panicOverlay = document.getElementById('panic-overlay');
+        const hud = document.getElementById('hud');
+
+        let isGameRunning = false;
+        let lastTime = 0;
+        let timeLeft = 30;
+        let gameTimerInterval = null;
+        let spawnTimer = 0;
+        let spawnCount = 0;
+        
+        const GRAVITY = 550;
+        const PIZZA_HEIGHT = 20;
+        
+        let CW, CH; 
+        let hand = { x: 0, y: 0, width: 125, height: 15, targetX: 0, vx: 0 };
+        
+        let stack = []; 
+        let fallingPizzas = [];
+        let particles = [];
+        let instability = 0; 
+
+        const pizzaColors = ['#FFC107', '#FFB300', '#FDD835'];
+        const toppingsColors = ['#D32F2F', '#388E3C', '#5D4037'];
+
+        function resize() {
+            CW = canvas.width = window.innerWidth;
+            CH = canvas.height = window.innerHeight;
+            hand.y = CH - 100;
+            if (!isGameRunning) hand.x = hand.targetX = CW / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function handleInput(clientX) {
+            if (!isGameRunning) return;
+            hand.targetX = Math.max(hand.width/2, Math.min(CW - hand.width/2, clientX));
+        }
+
+        window.addEventListener('mousemove', e => handleInput(e.clientX));
+        window.addEventListener('touchstart', e => handleInput(e.touches[0].clientX), {passive: false});
+        window.addEventListener('touchmove', e => { e.preventDefault(); handleInput(e.touches[0].clientX); }, {passive: false});
+
+        function updateScoreDisplay() {
+            scoreEl.innerText = stack.length;
+        }
+
+        function startGame() {
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            timeLeft = 30; 
+            spawnCount = 0;
+            timerEl.innerText = `00:30`;
+            hand.x = hand.targetX = CW / 2;
+            stack = []; 
+            updateScoreDisplay();
+            fallingPizzas = []; 
+            particles = [];
+            instability = 0;
+            isGameRunning = true;
+            lastTime = performance.now();
+            
+            if (gameTimerInterval) clearInterval(gameTimerInterval);
+            gameTimerInterval = setInterval(() => {
+                if (!isGameRunning) return;
+                timeLeft--;
+                timerEl.innerText = `00:${timeLeft < 10 ? '0'+timeLeft : timeLeft}`;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            clearInterval(gameTimerInterval);
+            finalScoreEl.innerText = stack.length;
+            gameOverScreen.classList.remove('hidden');
+            gameBody.style.backgroundColor = "#FFD700";
+            panicOverlay.style.opacity = 0;
+        }
+
+        function gameLoop(timestamp) {
+            if (!isGameRunning && particles.length === 0 && fallingPizzas.length === 0) return;
+            const dt = Math.min(0.03, (timestamp - lastTime) / 1000);
+            lastTime = timestamp;
+
+            ctx.clearRect(0, 0, CW, CH);
+            if (isGameRunning) updateGame(dt);
+            
+            updateFallingPhysics(dt);
+            updateParticles(dt);
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateGame(dt) {
+            // 1. Mouvement de la main
+            let prevHandX = hand.x;
+            hand.x += (hand.targetX - hand.x) * 14 * dt;
+            hand.vx = (hand.x - prevHandX) / dt;
+
+            // 2. PHYSIQUE DE LA TOUR (Frottements augmentés)
+            let maxInstability = 0;
+
+            for (let i = 0; i < stack.length; i++) {
+                let p = stack[i];
+                let anchorX = (i === 0) ? hand.x : stack[i-1].x;
+                let anchorWidth = (i === 0) ? hand.width : stack[i-1].width;
+                let targetX = anchorX + p.relX;
+
+                let weightAbove = stack.length - 1 - i;
+                
+                // --- PHYSIQUE DE GRIP ---
+                // Si la boîte actuelle est plus large que celle d'en dessous, 
+                // on augmente artificiellement la raideur pour "accrocher".
+                let sizeRatio = p.width / anchorWidth;
+                let gripMultiplier = sizeRatio > 1 ? sizeRatio * 1.5 : 1.0;
+
+                let stiffness = (400 + (weightAbove * 90)) * gripMultiplier; 
+                let damping = (30 + (weightAbove * 7)) * gripMultiplier;
+
+                let springForce = (targetX - p.x) * stiffness; 
+                let friction = -p.vx * damping;
+                
+                let inertiaImpact = 0.7 / (1 + weightAbove * 0.2);
+                let leanForce = (p.x - hand.x) * 2.5 * inertiaImpact; 
+
+                p.vx += (springForce + friction + leanForce) * dt;
+                p.x += p.vx * dt;
+            }
+
+            // 3. ANALYSE DE STABILITÉ (Calcul du Centre de Masse)
+            let breakIndex = -1;
+            for (let i = 0; i < stack.length; i++) {
+                let basePizza = stack[i];
+                let supportWidth = basePizza.width;
+                
+                let combinedX = 0;
+                let count = 0;
+                for (let j = i + 1; j < stack.length; j++) {
+                    combinedX += stack[j].x;
+                    count++;
+                }
+                
+                if (count > 0) {
+                    let centerOfMassAbove = combinedX / count;
+                    // Seuil de rupture plus indulgent si les boîtes au dessus sont larges
+                    let threshold = supportWidth * 0.52; 
+                    let currentInstability = Math.abs(centerOfMassAbove - basePizza.x) / threshold;
+                    maxInstability = Math.max(maxInstability, currentInstability);
+
+                    if (currentInstability > 1) {
+                        breakIndex = i + 1;
+                        break;
+                    }
+                } else if (i === 0 && stack.length === 1) {
+                    let currentInstability = Math.abs(stack[0].x - hand.x) / (hand.width * 0.6);
+                    maxInstability = Math.max(maxInstability, currentInstability);
+                    if (currentInstability > 1) breakIndex = 0;
+                }
+            }
+
+            instability = maxInstability;
+            handlePanicEffects();
+
+            if (breakIndex !== -1) splitTower(breakIndex);
+
+            spawnTimer -= dt;
+            if (spawnTimer <= 0) {
+                spawnPizza();
+                let difficulty = (30 - timeLeft) / 30;
+                spawnTimer = Math.max(0.65, 1.8 - (difficulty * 1.0));
+            }
+
+            updateCollisions(dt);
+        }
+
+        function handlePanicEffects() {
+            if (instability > 0.85) {
+                let intensity = (instability - 0.85) / 0.15; 
+                panicOverlay.style.opacity = (Math.sin(Date.now() / 40) * 0.2 + 0.2) * intensity;
+                hud.style.transform = `scale(${1 + Math.sin(Date.now() / 30) * 0.05 * intensity})`;
+                gameBody.style.backgroundColor = (Math.floor(Date.now() / 120) % 2 === 0) ? "#FFD700" : "#FFAAAA";
+            } else {
+                panicOverlay.style.opacity = 0;
+                hud.style.transform = "scale(1)";
+                gameBody.style.backgroundColor = "#FFD700";
+            }
+        }
+
+        function splitTower(index) {
+            const fallingPart = stack.splice(index);
+            fallingPart.forEach((p, i) => {
+                fallingPizzas.push({
+                    x: p.x,
+                    y: hand.y - ((index + i + 1) * PIZZA_HEIGHT),
+                    vy: -10 - Math.random() * 30,
+                    vx: p.vx * 0.6 + (p.x - hand.x) * 0.2 + (Math.random() - 0.5) * 80,
+                    width: p.width,
+                    color: p.color,
+                    toppings: p.toppings,
+                    isDebris: true,
+                    rot: 0,
+                    rotVel: (Math.random() - 0.5) * 6
+                });
+            });
+            if (fallingPart.length > 0) {
+                createExplosion(fallingPart[0].x, hand.y - (index + 1) * PIZZA_HEIGHT, 12, "#D32F2F");
+            }
+            updateScoreDisplay();
+        }
+
+        function updateCollisions(dt) {
+            for (let i = fallingPizzas.length - 1; i >= 0; i--) {
+                let p = fallingPizzas[i];
+                if (p.isDebris) continue;
+
+                p.y += p.vy * dt;
+                p.vy += GRAVITY * dt;
+
+                let caught = false;
+                for (let j = stack.length - 1; j >= 0; j--) {
+                    let s = stack[j];
+                    let sY = hand.y - (j + 1) * PIZZA_HEIGHT;
+                    
+                    if (p.y > sY - 15 && p.y < sY + 15) {
+                        // Capture sur le sommet (Tolérance élargie)
+                        if (j === stack.length - 1 && Math.abs(p.x - s.x) < (s.width / 2 + p.width / 2.5)) {
+                            catchPizza(p, i);
+                            caught = true;
+                            break;
+                        } 
+                        // Collision latérale
+                        else if (Math.abs(p.x - s.x) < (s.width / 2 + s.width / 2.2)) {
+                            let force = (p.x < s.x ? -1 : 1) * 120;
+                            s.vx += force; 
+                            p.isDebris = true;
+                            p.vx = (p.x < s.x ? -100 : 100);
+                            p.vy = -50;
+                            p.rot = 0;
+                            p.rotVel = (Math.random() - 0.5) * 8;
+                            createExplosion(p.x, p.y, 4, "#E65100");
+                            caught = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!caught && stack.length === 0) {
+                    if (p.y > hand.y - 15 && p.y < hand.y + 15) {
+                        if (Math.abs(p.x - hand.x) < (hand.width / 2 + p.width / 2.8)) {
+                            catchPizza(p, i);
+                            caught = true;
+                        }
+                    }
+                }
+
+                if (p.y > CH + 100) fallingPizzas.splice(i, 1);
+            }
+        }
+
+        function spawnPizza() {
+            // Fondations toujours larges, puis tailles variées
+            let width;
+            if (spawnCount < 5) {
+                width = 145 + Math.random() * 25;
+            } else {
+                // Alternance entre petites et moyennes/grandes boîtes
+                width = 80 + Math.random() * 60;
+            }
+            
+            fallingPizzas.push({
+                x: 100 + Math.random() * (CW - 200),
+                y: -50,
+                vy: 110 + Math.random() * 50,
+                width: width,
+                color: pizzaColors[Math.floor(Math.random() * pizzaColors.length)],
+                toppings: Array.from({length: 5}, () => ({
+                    x: (Math.random()-0.5)*50, y: (Math.random()-0.5)*8, 
+                    c: toppingsColors[Math.floor(Math.random()*toppingsColors.length)]
+                }))
+            });
+            spawnCount++;
+        }
+
+        function catchPizza(p, idx) {
+            fallingPizzas.splice(idx, 1);
+            let anchorX = stack.length === 0 ? hand.x : stack[stack.length - 1].x;
+            let relX = p.x - anchorX;
+
+            stack.push({
+                x: p.x,
+                vx: hand.vx * 0.2, // Transfert d'inertie latéral réduit pour plus de stabilité
+                relX: relX,
+                width: p.width,
+                color: p.color,
+                toppings: p.toppings
+            });
+            
+            updateScoreDisplay();
+            createExplosion(p.x, hand.y - stack.length * PIZZA_HEIGHT, 5, "#fff");
+        }
+
+        function updateFallingPhysics(dt) {
+            for (let i = fallingPizzas.length - 1; i >= 0; i--) {
+                let p = fallingPizzas[i];
+                if (!p.isDebris) continue;
+                p.vy += GRAVITY * dt;
+                p.x += (p.vx || 0) * dt;
+                p.y += p.vy * dt;
+                if (p.rot !== undefined) p.rot += p.rotVel * dt;
+                if (p.y > CH + 150) fallingPizzas.splice(i, 1);
+            }
+        }
+
+        function updateParticles(dt) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.life -= dt;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function createExplosion(x, y, count, color) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 350,
+                    vy: (Math.random() - 0.5) * 350,
+                    life: 0.5,
+                    color: color,
+                    size: Math.random() * 3 + 2
+                });
+            }
+        }
+
+        function drawGame() {
+            // Dessin du sol (Pizzeria)
+            ctx.fillStyle = '#E8D5B5';
+            ctx.fillRect(0, hand.y + 15, CW, CH);
+            ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+            ctx.lineWidth = 2;
+            for(let i=0; i<CW; i+=40) {
+                ctx.beginPath(); ctx.moveTo(i, hand.y+15); ctx.lineTo(i, CH); ctx.stroke();
+            }
+
+            // Plateau / Main
+            ctx.fillStyle = '#5D4037';
+            ctx.fillRect(hand.x - hand.width/2, hand.y, hand.width, hand.height);
+            ctx.fillStyle = '#FFF';
+            ctx.fillRect(hand.x - 8, hand.y + hand.height, 16, CH - hand.y);
+
+            // Pile Active
+            stack.forEach((p, i) => {
+                let yPos = hand.y - (i + 1) * PIZZA_HEIGHT;
+                drawPizzaBox(ctx, p.x, yPos, p.width, PIZZA_HEIGHT, p.toppings, p.color);
+            });
+
+            // Débris et Pizzas en chute
+            fallingPizzas.forEach(p => {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                if (p.rot !== undefined) ctx.rotate(p.rot);
+                drawPizzaBox(ctx, 0, 0, p.width, PIZZA_HEIGHT, p.toppings, p.color);
+                ctx.restore();
+            });
+            
+            // Particules
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life * 2;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        function drawPizzaBox(c, x, y, w, h, toppings, cheeseColor) {
+            // Ombre légère
+            c.fillStyle = 'rgba(0,0,0,0.15)';
+            c.fillRect(x - w/2 + 3, y + h, w - 6, 3);
+
+            // Croûte
+            c.fillStyle = '#E65100';
+            c.beginPath();
+            c.roundRect(x - w/2, y, w, h, 4);
+            c.fill();
+            // Fromage
+            c.fillStyle = cheeseColor;
+            c.beginPath();
+            c.roundRect(x - w/2 + 2, y + 2, w - 4, h - 4, 2);
+            c.fill();
+            // Garniture
+            if (toppings) {
+                toppings.forEach(t => {
+                    c.fillStyle = t.c;
+                    c.beginPath();
+                    c.arc(x + t.x, y + h/2 + t.y/2, 2.2, 0, Math.PI*2);
+                    c.fill();
+                });
+            }
+        }
+
+        document.getElementById('start-btn').onclick = startGame;
+        document.getElementById('restart-btn').onclick = startGame;
+    </script>
+</body>
+</html>
