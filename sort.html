@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Speedrun Chronologique - Alerte Maximale</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            touch-action: none;
+            background: #f8fafc;
+            user-select: none;
+            overflow: hidden;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* Halo autour de l'écran */
+        #screen-alert {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: inset 0 0 60px rgba(249, 115, 22, 0);
+            transition: box-shadow 0.5s ease;
+        }
+
+        .screen-alert-active {
+            animation: pulse-screen 1s infinite alternate;
+        }
+
+        @keyframes pulse-screen {
+            from { box-shadow: inset 0 0 30px rgba(249, 115, 22, 0.4); }
+            to { box-shadow: inset 0 0 80px rgba(249, 115, 22, 0.8); }
+        }
+
+        /* Animation du bouton Valider */
+        .btn-panic {
+            animation: pulse-button 0.5s infinite alternate !important;
+            background-color: #f97316 !important;
+            transform: scale(1.05);
+        }
+
+        @keyframes pulse-button {
+            from { opacity: 1; transform: scale(1.05); }
+            to { opacity: 0.7; transform: scale(1); }
+        }
+
+        .timeline-container {
+            height: 45vh;
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            margin-top: 10px;
+        }
+        .timeline-track {
+            position: absolute;
+            left: 45px;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        .draggable-item {
+            position: absolute;
+            left: 0;
+            right: 0;
+            transition: top 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.2);
+            z-index: 10;
+            touch-action: none;
+            padding-left: 15px;
+        }
+        .draggable-item.dragging {
+            transition: none;
+            z-index: 50;
+            transform: scale(1.05);
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border: 2px solid #f1f5f9;
+            min-height: 65px;
+        }
+        .emoji-box {
+            width: 45px;
+            height: 45px;
+            background: #f1f5f9;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .label-text {
+            font-weight: 700;
+            color: #1e293b;
+            font-size: 1rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .dragging .label-text { opacity: 1; }
+        
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .penalty-flash { animation: flashRed 0.5s ease-out; color: #ef4444 !important; }
+        @keyframes flashRed {
+            0% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        .popup-score {
+            position: absolute;
+            font-weight: 900;
+            font-size: 1.5rem;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 110;
+            animation: popup 0.8s ease-out forwards;
+        }
+        @keyframes popup {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-40px); }
+        }
+
+        .loader-bar {
+            height: 6px;
+            background: #6366f1;
+            width: 0%;
+            border-radius: 10px;
+            transition: width 3s linear;
+        }
+        
+        .timer-ring {
+            transition: stroke-dashoffset 0.1s linear;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        .halo-orange {
+            filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.8));
+            animation: pulse-timer 1s infinite alternate;
+        }
+        @keyframes pulse-timer {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex flex-col items-center justify-start pt-4 px-6">
+
+    <!-- Effet de halo sur tout l'écran -->
+    <div id="screen-alert"></div>
+
+    <div class="w-full max-w-xs flex justify-between items-center mb-4 z-10">
+        <div class="flex flex-col">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Score Total</span>
+            <span id="score-display" class="text-3xl font-black text-indigo-600">200</span>
+        </div>
+        
+        <div id="timer-container" class="relative flex items-center justify-center transition-all duration-300">
+            <svg class="w-16 h-16">
+                <circle cx="32" cy="32" r="28" stroke="#e2e8f0" stroke-width="4" fill="transparent" />
+                <circle id="timer-circle" cx="32" cy="32" r="28" stroke="#6366f1" stroke-width="4" fill="transparent" 
+                    stroke-dasharray="175.9" stroke-dashoffset="0" class="timer-ring" />
+            </svg>
+            <span id="level-timer" class="absolute text-lg font-black text-slate-700">23</span>
+        </div>
+    </div>
+
+    <div class="text-center shrink-0 w-full max-w-xs mb-2 z-10">
+        <div id="level-badge" class="inline-block px-3 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase tracking-widest mb-1">
+            Niveau 1 / 6
+        </div>
+        <h1 id="level-title" class="text-xl font-black text-slate-800 uppercase leading-none">Harry Potter 1</h1>
+    </div>
+
+    <div class="timeline-container z-10" id="container">
+        <div class="timeline-track"></div>
+        <div id="items-list"></div>
+    </div>
+
+    <div class="w-full max-w-xs mt-4 shrink-0 z-10">
+        <button id="validate-btn" onclick="checkWin()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-all duration-300">
+            Valider l'ordre
+        </button>
+        <p class="text-center text-[10px] text-slate-400 mt-2 font-bold uppercase">+200 pts/Victoire | Erreur = -50 pts</p>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-slate-900/95 flex items-center justify-center hidden z-[200] backdrop-blur-md">
+        <div class="bg-white rounded-[40px] p-8 text-center w-full max-w-sm mx-4 shadow-2xl relative overflow-hidden">
+            <div id="modal-emoji" class="text-6xl mb-4">🏁</div>
+            <h2 id="modal-title" class="text-3xl font-black text-slate-900 mb-2">NIVEAU RÉUSSI</h2>
+            
+            <div class="bg-slate-50 rounded-2xl p-4 mb-6">
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Score Actuel</p>
+                <p id="modal-score" class="text-5xl font-black text-indigo-600">0</p>
+            </div>
+
+            <div id="next-theme-container">
+                <p class="text-slate-400 text-[10px] font-bold uppercase mb-1">Prochain défi :</p>
+                <p id="next-theme-title" class="text-lg font-black text-slate-800 uppercase mb-4">La Reine des Neiges</p>
+                <div class="w-full bg-slate-100 rounded-full overflow-hidden mb-2">
+                    <div id="transition-loader" class="loader-bar"></div>
+                </div>
+            </div>
+
+            <div id="final-btn-container" class="hidden">
+                 <button onclick="location.reload()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg">
+                    Rejouer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const LEVELS = [
+            {
+                title: "Harry Potter 1",
+                data: [
+                    { id: 'hp1', emoji: '✉️', label: 'Lettre de Poudlard' },
+                    { id: 'hp2', emoji: '🪄', label: 'Chemin de Traverse' },
+                    { id: 'hp3', emoji: '🚂', label: 'Poudlard Express' },
+                    { id: 'hp4', emoji: '🧙', label: 'Choixpeau Magique' },
+                    { id: 'hp5', emoji: '💎', label: 'Face à Voldemort' }
+                ]
+            },
+            {
+                title: "La Reine des Neiges",
+                data: [
+                    { id: 'rdn1', emoji: '👭', label: 'Anna & Elsa enfants' },
+                    { id: 'rdn2', emoji: '👑', label: 'Le Couronnement' },
+                    { id: 'rdn3', emoji: '❄️', label: 'Libérée, Délivrée' },
+                    { id: 'rdn4', emoji: '☃️', label: 'Rencontre avec Olaf' },
+                    { id: 'rdn5', emoji: '❤️', label: 'Acte de vrai amour' }
+                ]
+            },
+            {
+                title: "Les Saisons",
+                data: [
+                    { id: 'p', emoji: '🌱', label: 'Printemps' },
+                    { id: 'e', emoji: '🏖️', label: 'Été' },
+                    { id: 'h', emoji: '🎃', label: 'Halloween' },
+                    { id: 'n', emoji: '🌲', label: 'Noël' },
+                    { id: 'j', emoji: '🍾', label: 'Jour de l\'an' }
+                ]
+            },
+            {
+                title: "Histoire de France",
+                data: [
+                    { id: 'cm', emoji: '⚔️', label: 'Charles Martel' },
+                    { id: 'lx', emoji: '👑', label: 'Louis XIV' },
+                    { id: 'rf', emoji: '🇫🇷', label: 'Révolution Française' },
+                    { id: 'np', emoji: '🎩', label: 'Napoléon Ier' },
+                    { id: 'dg', emoji: '🎙️', label: 'Appel du 18 juin' }
+                ]
+            },
+            {
+                title: "Inventions",
+                data: [
+                    { id: 'imp', emoji: '📚', label: 'Imprimerie' },
+                    { id: 'amp', emoji: '💡', label: 'Ampoule Électrique' },
+                    { id: 'cin', emoji: '🎥', label: 'Cinéma' },
+                    { id: 'ord', emoji: '💻', label: 'Ordinateur' },
+                    { id: 'int', emoji: '🌐', label: 'Internet' }
+                ]
+            },
+            {
+                title: "La Journée",
+                data: [
+                    { id: 'rev', emoji: '⏰', label: 'Réveil' },
+                    { id: 'dej', emoji: '☕', label: 'Petit Déjeuner' },
+                    { id: 'tra', emoji: '🚲', label: 'Trajet' },
+                    { id: 'rep', emoji: '🍕', label: 'Déjeuner' },
+                    { id: 'dor', emoji: '🌙', label: 'Sommeil' }
+                ]
+            }
+        ];
+
+        let currentLevelIndex = 0;
+        let items = [];
+        let activeItem = null;
+        let startY = 0;
+        let startTop = 0;
+        const itemHeight = 75; 
+
+        let score = 200;
+        const MAX_TIME = 23;
+        let levelTimeLeft = MAX_TIME;
+        let gameActive = false;
+        let mainTimerInterval;
+
+        const listWrapper = document.getElementById('items-list');
+        const modal = document.getElementById('modal');
+        const scoreDisplay = document.getElementById('score-display');
+        const levelTimerDisplay = document.getElementById('level-timer');
+        const timerCircle = document.getElementById('timer-circle');
+        const timerContainer = document.getElementById('timer-container');
+        const screenAlert = document.getElementById('screen-alert');
+        const validateBtn = document.getElementById('validate-btn');
+        const loaderBar = document.getElementById('transition-loader');
+
+        function updateScore(val) {
+            score = Math.max(0, score + val);
+            scoreDisplay.innerText = score;
+            
+            const popup = document.createElement('div');
+            popup.className = 'popup-score ' + (val > 0 ? 'text-green-500' : 'text-red-500');
+            popup.innerText = (val > 0 ? '+' : '') + val;
+            popup.style.left = '60px';
+            popup.style.top = '40px';
+            document.body.appendChild(popup);
+            setTimeout(() => popup.remove(), 800);
+
+            if (val < 0) scoreDisplay.classList.add('penalty-flash');
+            setTimeout(() => scoreDisplay.classList.remove('penalty-flash'), 500);
+        }
+
+        function startTimers() {
+            if (mainTimerInterval) clearInterval(mainTimerInterval);
+            gameActive = true;
+            
+            mainTimerInterval = setInterval(() => {
+                if (!gameActive) return;
+                
+                updateScore(-1);
+                levelTimeLeft--;
+                levelTimerDisplay.innerText = levelTimeLeft;
+                
+                const offset = 175.9 - (levelTimeLeft / MAX_TIME) * 175.9;
+                timerCircle.style.strokeDashoffset = offset;
+
+                // Alerte si <= 5 secondes
+                if (levelTimeLeft <= 5) {
+                    timerContainer.classList.add('halo-orange');
+                    screenAlert.classList.add('screen-alert-active');
+                    validateBtn.classList.add('btn-panic');
+                    timerCircle.style.stroke = "#f97316";
+                } else {
+                    timerContainer.classList.remove('halo-orange');
+                    screenAlert.classList.remove('screen-alert-active');
+                    validateBtn.classList.remove('btn-panic');
+                    timerCircle.style.stroke = "#6366f1";
+                }
+
+                if (levelTimeLeft <= 0) {
+                    handleTimeOut();
+                }
+            }, 1000);
+        }
+
+        function handleTimeOut() {
+            gameActive = false;
+            updateScore(-50); 
+            checkWin(true); 
+        }
+
+        function initLevel(index) {
+            currentLevelIndex = index;
+            const level = LEVELS[index];
+            levelTimeLeft = MAX_TIME;
+            levelTimerDisplay.innerText = MAX_TIME;
+            timerCircle.style.strokeDashoffset = 0;
+            timerContainer.classList.remove('halo-orange');
+            screenAlert.classList.remove('screen-alert-active');
+            validateBtn.classList.remove('btn-panic');
+            validateBtn.innerText = "Valider l'ordre";
+            
+            document.getElementById('level-badge').innerText = `Niveau ${index + 1} / ${LEVELS.length}`;
+            document.getElementById('level-title').innerText = level.title;
+            modal.classList.add('hidden');
+            loaderBar.style.width = '0%';
+
+            let shuffled;
+            do {
+                shuffled = [...level.data].sort(() => Math.random() - 0.5);
+            } while (shuffled.every((v, i) => v.id === level.data[i].id));
+
+            items = shuffled.map((d, i) => ({ ...d, currentPos: i }));
+            render();
+            startTimers();
+        }
+
+        function render() {
+            listWrapper.innerHTML = '';
+            items.forEach((item) => {
+                const el = document.createElement('div');
+                el.className = 'draggable-item';
+                el.style.top = `${item.currentPos * itemHeight}px`;
+                el.innerHTML = `
+                    <div class="card" id="card-${item.id}">
+                        <div class="emoji-box">${item.emoji}</div>
+                        <span class="label-text">${item.label}</span>
+                    </div>
+                `;
+                el.onpointerdown = (e) => onStart(e, item, el);
+                listWrapper.appendChild(el);
+            });
+        }
+
+        function onStart(e, item, el) {
+            if (!gameActive) return;
+            activeItem = { item, el };
+            startY = e.clientY;
+            startTop = parseInt(el.style.top);
+            el.classList.add('dragging');
+            el.setPointerCapture(e.pointerId);
+            el.onpointermove = (e) => onMove(e);
+            el.onpointerup = () => onEnd();
+        }
+
+        function onMove(e) {
+            if (!activeItem) return;
+            const deltaY = e.clientY - startY;
+            let newTop = startTop + deltaY;
+            const maxTop = (LEVELS[currentLevelIndex].data.length - 1) * itemHeight;
+            newTop = Math.max(0, Math.min(newTop, maxTop));
+            activeItem.el.style.top = `${newTop}px`;
+            const newIndex = Math.round(newTop / itemHeight);
+            if (newIndex !== activeItem.item.currentPos) {
+                const targetItem = items.find(it => it.currentPos === newIndex && it !== activeItem.item);
+                if (targetItem) {
+                    targetItem.currentPos = activeItem.item.currentPos;
+                    activeItem.item.currentPos = newIndex;
+                    updatePositions();
+                }
+            }
+        }
+
+        function updatePositions() {
+            const elements = listWrapper.querySelectorAll('.draggable-item');
+            items.forEach((it) => {
+                if (activeItem && it === activeItem.item) return;
+                const el = Array.from(elements).find(e => e.querySelector('.label-text').innerText === it.label);
+                if (el) el.style.top = `${it.currentPos * itemHeight}px`;
+            });
+        }
+
+        function onEnd() {
+            if (!activeItem) return;
+            activeItem.el.classList.remove('dragging');
+            activeItem.el.style.top = `${activeItem.item.currentPos * itemHeight}px`;
+            activeItem = null;
+        }
+
+        function checkWin(forceNext = false) {
+            const sortedItems = [...items].sort((a, b) => a.currentPos - b.currentPos);
+            const levelData = LEVELS[currentLevelIndex].data;
+            const isCorrect = sortedItems.every((item, i) => item.id === levelData[i].id);
+
+            if (isCorrect || forceNext) {
+                gameActive = false;
+                clearInterval(mainTimerInterval);
+                screenAlert.classList.remove('screen-alert-active');
+                validateBtn.classList.remove('btn-panic');
+                if (!forceNext) updateScore(200); 
+                listWrapper.querySelectorAll('.label-text').forEach(t => t.style.opacity = '1');
+                setTimeout(() => showVictory(forceNext), 600);
+            } else {
+                updateScore(-50);
+                validateBtn.classList.add('bg-red-600', 'shake');
+                validateBtn.innerText = "ERREUR -50 pts";
+                setTimeout(() => {
+                    validateBtn.classList.remove('bg-red-600', 'shake');
+                    if (levelTimeLeft > 5) validateBtn.classList.add('bg-slate-900');
+                    validateBtn.innerText = "Valider l'ordre";
+                }, 1000);
+            }
+        }
+
+        function showVictory(wasTimeout) {
+            if (!wasTimeout) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            
+            const isLast = currentLevelIndex === LEVELS.length - 1;
+            document.getElementById('modal-score').innerText = score;
+            
+            if (isLast) {
+                document.getElementById('modal-emoji').innerText = score > 400 ? "👑" : "🥉";
+                document.getElementById('modal-title').innerText = "SCORE FINAL";
+                document.getElementById('next-theme-container').classList.add('hidden');
+                document.getElementById('final-btn-container').classList.remove('hidden');
+            } else {
+                document.getElementById('modal-emoji').innerText = wasTimeout ? "⏰" : "🏁";
+                document.getElementById('modal-title').innerText = wasTimeout ? "TEMPS ÉCOULÉ" : "NIVEAU RÉUSSI";
+                document.getElementById('next-theme-title').innerText = LEVELS[currentLevelIndex + 1].title;
+                
+                setTimeout(() => { loaderBar.style.width = '100%'; }, 10);
+                setTimeout(() => { initLevel(currentLevelIndex + 1); }, 3000);
+            }
+            modal.classList.remove('hidden');
+        }
+
+        initLevel(0);
+    </script>
+</body>
+</html>
