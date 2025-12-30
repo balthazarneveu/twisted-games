@@ -84,6 +84,10 @@
             text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
             animation: pulse 1s ease-in-out infinite;
             margin-bottom: 20px;
+            text-align: center;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         #total-score {
@@ -92,6 +96,10 @@
             font-weight: 300;
             letter-spacing: 5px;
             opacity: 0.8;
+            text-align: center;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         #final-score-screen {
@@ -104,11 +112,13 @@
             z-index: 2000;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             opacity: 0;
             pointer-events: none;
             transition: opacity 1s ease;
+            padding: 40px 20px 20px;
+            overflow-y: auto;
         }
 
         #final-score-screen.show {
@@ -123,8 +133,11 @@
             text-transform: uppercase;
             letter-spacing: 15px;
             text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
-            margin-bottom: 40px;
+            margin-bottom: 20px;
+            margin-top: 20px;
             animation: pulse 2s ease-in-out infinite;
+            text-align: center;
+            flex-shrink: 0;
         }
 
         #final-score-value {
@@ -132,8 +145,10 @@
             font-size: 5rem;
             font-weight: 700;
             text-shadow: 0 0 40px rgba(0, 242, 255, 0.8);
-            margin-bottom: 60px;
+            margin-bottom: 30px;
             font-family: 'Courier New', monospace;
+            text-align: center;
+            flex-shrink: 0;
         }
 
         #final-score-breakdown {
@@ -142,6 +157,31 @@
             letter-spacing: 3px;
             text-align: center;
             line-height: 2;
+            max-width: 600px;
+            width: 100%;
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0 20px 20px;
+            flex-shrink: 1;
+        }
+
+        #final-score-breakdown::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #final-score-breakdown::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        #final-score-breakdown::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        #final-score-breakdown::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
         }
 
         @keyframes pulse {
@@ -178,6 +218,7 @@
             text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
             margin-bottom: 40px;
             animation: pulse 2s ease-in-out infinite;
+            text-align: center;
         }
 
         #fullscreen-button {
@@ -210,6 +251,76 @@
             font-size: 1rem;
             margin-top: 30px;
             letter-spacing: 3px;
+        }
+
+        /* Mobile responsive styles */
+        @media (max-width: 768px) {
+            #transition-overlay {
+                padding: 20px;
+            }
+
+            #start-title {
+                font-size: 1.8rem;
+                letter-spacing: 5px;
+                text-align: center;
+                padding: 0 20px;
+                width: 100%;
+            }
+
+            #transition-text {
+                font-size: 1.5rem;
+                letter-spacing: 3px;
+                text-align: center;
+                padding: 0 20px;
+                width: 100%;
+                word-wrap: break-word;
+                white-space: normal;
+            }
+
+            #total-score {
+                font-size: 1rem;
+                letter-spacing: 2px;
+                text-align: center;
+                padding: 0 20px;
+                width: 100%;
+            }
+
+            #final-score-screen {
+                padding: 20px 10px 10px;
+            }
+
+            #final-score-title {
+                font-size: 1.5rem;
+                letter-spacing: 5px;
+                text-align: center;
+                padding: 0 20px;
+                margin-bottom: 15px;
+                margin-top: 10px;
+            }
+
+            #final-score-value {
+                font-size: 2.5rem;
+                text-align: center;
+                margin-bottom: 20px;
+            }
+
+            #final-score-breakdown {
+                font-size: 0.85rem;
+                padding: 0 15px 15px;
+                max-height: calc(100vh - 200px);
+            }
+
+            #fullscreen-button {
+                padding: 15px 30px;
+                font-size: 1rem;
+                letter-spacing: 3px;
+            }
+
+            #start-instruction {
+                font-size: 0.85rem;
+                text-align: center;
+                padding: 0 20px;
+            }
         }
     </style>
 </head>
@@ -246,19 +357,19 @@
         recycle2: 20,
         recycle3: 20,
         pizza: 12,
-        zen: 12,
+        zen: 15,
         santa: 20,
-        scratchcard_zen: 15,
+        scratchcard_zen: 20,
         scratchcard_danger: 10,
         scratchcard_minefield: 10,
         scratchcard_final: 10,
         sort: 60,
         sort1: 20,
         sort2: 20,
-        sort3: 10,
+        sort3: 20,
         sort4: 20,
         sort5: 20,
-        sort6: 10,
+        sort6: 20,
         ride_routine: 15,
         ride_routine1: 15,
         ride_routine2: 15,
@@ -284,13 +395,11 @@
         { gameId: 'morning_rush2', label: 'Morning Rush 2' },
         { gameId: 'santa', label: 'Jumping Santa' },
         { gameId: 'sort2', label: 'Speedrun: Reine des Neiges' },
-
         { gameId: 'ride_routine2', label: 'Rider Routine 2' },
         { gameId: 'scratchcard_danger', label: 'Danger Zone' },
         { gameId: 'sort1', label: 'Speedrun: Harry Potter' },
         { gameId: 'scratchcard_minefield', label: 'Minefield' },
         { gameId: 'morning_rush4', label: 'Morning Rush 4' },
-
         { gameId: 'sort5', label: 'Speedrun: Inventions' },
         { gameId: 'pizza', label: 'Pizza Stack Panic' },
         { gameId: 'recycle1', label: 'Eco-Tri: Compost' },
