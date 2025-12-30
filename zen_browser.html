@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sérénité Absolue</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background-color: #09090b;
+            color: #fafafa;
+            font-family: ui-sans-serif, system-ui, sans-serif;
+        }
+
+        .viewport {
+            width: 100vw;
+            height: 100vh;
+            max-width: 56.25vh;
+            margin: 0 auto;
+            background: #09090b;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #stress-halo {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 40;
+            transition: opacity 0.3s ease;
+            background: radial-gradient(circle, transparent 20%, rgba(220, 38, 38, 0) 100%);
+            opacity: 0;
+        }
+
+        .scroll-area {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            scroll-behavior: smooth;
+        }
+
+        .scroll-area::-webkit-scrollbar { display: none; }
+
+        @keyframes pulse-red {
+            0%, 100% { background: radial-gradient(circle, transparent 30%, rgba(220, 38, 38, 0.4) 100%); }
+            50% { background: radial-gradient(circle, transparent 10%, rgba(220, 38, 38, 0.7) 100%); }
+        }
+
+        .heavy-stress { animation: pulse-red 1.5s infinite; }
+
+        .shake { animation: shake-anim 0.15s infinite; }
+
+        @keyframes shake-anim {
+            0% { transform: translate(1px, 1px); }
+            50% { transform: translate(-1px, -2px); }
+            100% { transform: translate(1px, 2px); }
+        }
+
+        .page {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            background: #09090b;
+        }
+
+        .hidden { display: none !important; }
+
+        .btn-game {
+            height: 100px;
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            transition: all 0.2s;
+            color: #a1a1aa;
+        }
+
+        .btn-game:active {
+            transform: scale(0.95);
+            background: #27272a;
+            color: #fff;
+        }
+
+        #confetti-canvas {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 110;
+        }
+
+        /* Popup Incompréhensible */
+        #error-popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 200;
+            background: #ef4444;
+            color: white;
+            padding: 2rem;
+            border-radius: 1.5rem;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(239, 68, 68, 0.5);
+            width: 80%;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="viewport" id="app-container">
+    <canvas id="confetti-canvas"></canvas>
+    <div id="stress-halo"></div>
+
+    <!-- POPUP ERREUR -->
+    <div id="error-popup" class="hidden">
+        <div class="text-6xl mb-4">❌</div>
+        <div class="text-2xl font-black mb-2 leading-tight">系统核心错误</div>
+        <div class="text-sm opacity-90 font-mono">
+            错误代码: 0x8004210B<br>
+            非法操作已被拦截
+        </div>
+        <button onclick="closePopup()" class="mt-6 px-8 py-2 bg-white text-red-600 rounded-full font-bold text-xs uppercase tracking-widest">
+            关闭
+        </button>
+    </div>
+
+    <!-- ÉCRAN 1: ACCUEIL -->
+    <div id="screen-start" class="page items-center justify-center p-12 text-center">
+        <div class="mb-12">
+            <div class="text-7xl mb-6 opacity-80">🧘</div>
+            <h1 class="text-2xl font-light tracking-[0.3em] uppercase">Zen</h1>
+        </div>
+        <button onclick="launchGame()" class="w-full py-5 border border-white/20 rounded-full text-sm tracking-widest font-bold hover:bg-white hover:text-black transition-all">
+            ENTRER
+        </button>
+    </div>
+
+    <!-- ÉCRAN 2: JEU -->
+    <div id="screen-game" class="page hidden">
+        <header class="p-6 pt-10 flex justify-between items-center z-50">
+            <div id="timer" class="text-4xl font-mono font-black text-white/90 tracking-tighter">10.00</div>
+            <div class="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-full border border-white/10">
+                <span id="current-flag" class="text-lg">🇨🇳</span>
+                <select id="lang-switch" onchange="changeLang(this.value)" class="bg-transparent border-none text-xs font-bold uppercase tracking-widest text-white/70 focus:outline-none appearance-none cursor-pointer">
+                    <option value="zh" data-flag="🇨🇳" class="bg-zinc-900">中文</option>
+                    <option value="fr" data-flag="🇫🇷" class="bg-zinc-900">FR</option>
+                    <option value="ja" data-flag="🇯🇵" class="bg-zinc-900">日本語</option>
+                    <option value="es" data-flag="🇪🇸" class="bg-zinc-900">ES</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="px-6 mb-4">
+            <div class="w-full h-[2px] bg-white/10 rounded-full overflow-hidden">
+                <div id="stress-bar" class="h-full w-0 bg-white transition-all duration-150"></div>
+            </div>
+        </div>
+
+        <main id="game-grid" class="scroll-area grid grid-cols-2 gap-4 pb-32">
+            <!-- Boutons -->
+        </main>
+    </div>
+
+    <!-- RÉSULTAT -->
+    <div id="screen-result" class="page hidden items-center justify-center p-10 z-[100] bg-black/95">
+        <h2 id="result-title" class="text-5xl font-black mb-4"></h2>
+        <p id="result-desc" class="text-white/40 mb-12 text-center text-sm tracking-wide uppercase"></p>
+        <button onclick="backToMenu()" class="w-full py-4 bg-white text-black rounded-full font-bold uppercase text-xs tracking-widest active:scale-95 transition-transform">
+            Réessayer
+        </button>
+    </div>
+</div>
+
+<script>
+    const dictionary = {
+        zh: { flag: "🇨🇳", win: "赢", others: ["输", "静", "空", "慢", "无", "息", "止"], winMsg: "Sérénité atteinte", loseMsg: "L'esprit s'est troublé" },
+        fr: { flag: "🇫🇷", win: "GAGNER", others: ["Perdre", "Non", "Ici", "Lent", "Faux", "Raté", "Fin"], winMsg: "Maîtrise totale", loseMsg: "Le stress a gagné" },
+        ja: { flag: "🇯🇵", win: "勝つ", others: ["負", "静", "空", "無", "止", "違", "終"], winMsg: "完璧", loseMsg: "乱れ" },
+        es: { flag: "🇪🇸", win: "GANAR", others: ["Perder", "No", "Mal", "Aquí", "Lento", "Nada", "Fin"], winMsg: "Éxito zen", loseMsg: "Demasiada presión" }
+    };
+
+    let game = {
+        active: false,
+        stress: 0,
+        time: 10,
+        lang: 'zh',
+        lastScroll: 0,
+        popupActive: false
+    };
+
+    let loop;
+    let confettiParticles = [];
+    const canvas = document.getElementById('confetti-canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function launchGame() {
+        game.lang = 'zh';
+        document.getElementById('lang-switch').value = 'zh';
+        document.getElementById('current-flag').innerText = dictionary['zh'].flag;
+        
+        game.stress = 0;
+        game.time = 10.0;
+        game.active = true;
+        game.popupActive = false;
+        confettiParticles = [];
+        
+        document.getElementById('error-popup').classList.add('hidden');
+        document.getElementById('screen-start').classList.add('hidden');
+        document.getElementById('screen-result').classList.add('hidden');
+        document.getElementById('screen-game').classList.remove('hidden');
+        document.getElementById('game-grid').scrollTop = 0;
+        
+        generateGrid();
+        startLoop();
+    }
+
+    function generateGrid() {
+        const grid = document.getElementById('game-grid');
+        grid.innerHTML = '';
+        const dict = dictionary[game.lang];
+        const count = 30; 
+        const winPos = Math.floor(Math.random() * 8) + 20; 
+
+        for (let i = 0; i < count; i++) {
+            const btn = document.createElement('button');
+            btn.className = "btn-game";
+            if (i === winPos) {
+                btn.innerText = dict.win;
+                btn.onclick = (e) => { e.stopPropagation(); finish(true); };
+            } else {
+                btn.innerText = dict.others[Math.floor(Math.random() * dict.others.length)];
+                btn.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    if (!game.popupActive) triggerError(); 
+                };
+            }
+            grid.appendChild(btn);
+        }
+    }
+
+    function triggerError() {
+        game.popupActive = true;
+        game.stress += 30; // Gros bonus de stress pour le mauvais clic
+        document.getElementById('error-popup').classList.remove('hidden');
+    }
+
+    function closePopup() {
+        game.popupActive = false;
+        document.getElementById('error-popup').classList.add('hidden');
+    }
+
+    function startLoop() {
+        clearInterval(loop);
+        loop = setInterval(() => {
+            if (game.active) {
+                game.time -= 0.01;
+                if (game.time <= 0) finish(false);
+                document.getElementById('timer').innerText = game.time.toFixed(2);
+                
+                // On ne récupère du stress que si le popup n'est pas là
+                if (!game.popupActive) {
+                    game.stress = Math.max(0, game.stress - 0.38);
+                }
+                
+                updateStressVisuals();
+                if (game.stress >= 100) finish(false);
+            }
+            if (confettiParticles.length > 0) updateConfetti();
+        }, 10);
+    }
+
+    function updateStressVisuals() {
+        const halo = document.getElementById('stress-halo');
+        const bar = document.getElementById('stress-bar');
+        const viewport = document.getElementById('app-container');
+        bar.style.width = game.stress + '%';
+        halo.style.opacity = game.stress / 100;
+        if (game.stress > 50) halo.classList.add('heavy-stress');
+        else halo.classList.remove('heavy-stress');
+        if (game.stress > 85) viewport.classList.add('shake');
+        else viewport.classList.remove('shake');
+    }
+
+    function changeLang(val) {
+        game.lang = val;
+        document.getElementById('current-flag').innerText = dictionary[val].flag;
+        generateGrid();
+    }
+
+    function finish(isWin) {
+        game.active = false;
+        game.popupActive = false;
+        const screen = document.getElementById('screen-result');
+        const title = document.getElementById('result-title');
+        const desc = document.getElementById('result-desc');
+        
+        document.getElementById('error-popup').classList.add('hidden');
+        screen.classList.remove('hidden');
+        title.innerText = isWin ? "ZEN" : "CHAOS";
+        title.className = isWin ? "text-5xl font-black mb-4 text-white tracking-widest" : "text-5xl font-black mb-4 text-red-600 tracking-widest";
+        desc.innerText = isWin ? dictionary[game.lang].winMsg : dictionary[game.lang].loseMsg;
+
+        if (isWin) createConfetti();
+    }
+
+    function backToMenu() {
+        document.getElementById('screen-result').classList.add('hidden');
+        document.getElementById('screen-game').classList.add('hidden');
+        document.getElementById('screen-start').classList.remove('hidden');
+        document.getElementById('app-container').classList.remove('shake');
+        confettiParticles = [];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function createConfetti() {
+        for (let i = 0; i < 120; i++) {
+            confettiParticles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height - canvas.height,
+                r: Math.random() * 6 + 4,
+                d: Math.random() * 10 + 10,
+                color: `hsl(${Math.random() * 360}, 70%, 60%)`,
+                tilt: Math.random() * 10 - 10,
+                tiltAngleIncremental: Math.random() * 0.07 + 0.05,
+                tiltAngle: 0
+            });
+        }
+    }
+
+    function updateConfetti() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        confettiParticles.forEach((p, i) => {
+            p.tiltAngle += p.tiltAngleIncremental;
+            p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
+            p.tilt = Math.sin(p.tiltAngle) * 15;
+
+            ctx.beginPath();
+            ctx.lineWidth = p.r;
+            ctx.strokeStyle = p.color;
+            ctx.moveTo(p.x + p.tilt + p.r / 4, p.y);
+            ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 4);
+            ctx.stroke();
+
+            if (p.y > canvas.height) {
+                confettiParticles[i] = { ...p, y: -20, x: Math.random() * canvas.width };
+            }
+        });
+    }
+
+    document.getElementById('game-grid').addEventListener('scroll', (e) => {
+        if (!game.active || game.popupActive) return;
+        const speed = Math.abs(e.target.scrollTop - game.lastScroll);
+        if (speed > 40) game.stress += (speed / 10);
+        game.lastScroll = e.target.scrollTop;
+    });
+
+</script>
+</body>
+</html>
