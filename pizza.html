@@ -116,10 +116,38 @@
             pointer-events: none;
             z-index: 1;
         }
+
+        /* Timer bar for chained games integration */
+        #timer-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            width: 100%;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        #timer-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff 0%, #00ffff 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        /* Fullscreen CSS for iframe mode */
+        body.in-iframe {
+            margin: 0;
+            padding: 0;
+        }
     </style>
 </head>
 <body id="game-body">
 
+    <div id="timer-bar">
+        <div id="timer-bar-fill"></div>
+    </div>
     <div id="panic-overlay"></div>
     <canvas id="gameCanvas"></canvas>
 
@@ -162,6 +190,11 @@
         let spawnTimer = 0;
         let spawnCount = 0;
         
+        // Chained games integration variables
+        let gameActive = false;
+        let useParentTimer = false;
+        let totalTime = 0;
+        
         const GRAVITY = 550;
         const PIZZA_HEIGHT = 20;
         
@@ -198,6 +231,23 @@
             scoreEl.innerText = stack.length;
         }
 
+        function updateTimerBar() {
+            const timerFill = document.getElementById('timer-bar-fill');
+            if (!timerFill) return;
+            
+            const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+            timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+            
+            // Change color when time is running low
+            if (percentage < 20) {
+                timerFill.style.background = '#ff0000';
+            } else if (percentage < 50) {
+                timerFill.style.background = '#ff9800';
+            } else {
+                timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+            }
+        }
+
         function startGame() {
             startScreen.classList.add('hidden');
             gameOverScreen.classList.add('hidden');
@@ -211,30 +261,45 @@
             particles = [];
             instability = 0;
             isGameRunning = true;
+            gameActive = true;
             lastTime = performance.now();
             
-            if (gameTimerInterval) clearInterval(gameTimerInterval);
-            gameTimerInterval = setInterval(() => {
-                if (!isGameRunning) return;
-                timeLeft--;
-                timerEl.innerText = `00:${timeLeft < 10 ? '0'+timeLeft : timeLeft}`;
-                if (timeLeft <= 0) endGame();
-            }, 1000);
+            // Only use internal timer if not in iframe mode
+            if (!useParentTimer) {
+                if (gameTimerInterval) clearInterval(gameTimerInterval);
+                gameTimerInterval = setInterval(() => {
+                    if (!isGameRunning) return;
+                    timeLeft--;
+                    timerEl.innerText = `00:${timeLeft < 10 ? '0'+timeLeft : timeLeft}`;
+                    if (timeLeft <= 0) endGame();
+                }, 1000);
+            }
 
             requestAnimationFrame(gameLoop);
         }
 
         function endGame() {
+            if (!gameActive && !isGameRunning) return;
             isGameRunning = false;
+            gameActive = false;
             clearInterval(gameTimerInterval);
             finalScoreEl.innerText = stack.length;
             gameOverScreen.classList.remove('hidden');
             gameBody.style.backgroundColor = "#FFD700";
             panicOverlay.style.opacity = 0;
+            
+            // Notify parent if in iframe
+            if (window.parent !== window) {
+                window.parent.postMessage({ 
+                    type: 'gameComplete', 
+                    game: 'pizza',
+                    score: stack.length 
+                }, '*');
+            }
         }
 
         function gameLoop(timestamp) {
-            if (!isGameRunning && particles.length === 0 && fallingPizzas.length === 0) return;
+            if (!gameActive && !isGameRunning && particles.length === 0 && fallingPizzas.length === 0) return;
             const dt = Math.min(0.03, (timestamp - lastTime) / 1000);
             lastTime = timestamp;
 
@@ -244,6 +309,22 @@
             updateFallingPhysics(dt);
             updateParticles(dt);
             drawGame();
+            
+            // Update timer bar if using parent timer
+            if (useParentTimer) {
+                updateTimerBar();
+                // Update timer display
+                if (timeLeft >= 0) {
+                    const minutes = Math.floor(timeLeft / 60);
+                    const seconds = Math.floor(timeLeft % 60);
+                    timerEl.innerText = `${minutes < 10 ? '0'+minutes : minutes}:${seconds < 10 ? '0'+seconds : seconds}`;
+                }
+                if (timeLeft <= 0 && totalTime > 0) {
+                    endGame();
+                    return;
+                }
+            }
+            
             requestAnimationFrame(gameLoop);
         }
 
@@ -560,6 +641,47 @@
 
         document.getElementById('start-btn').onclick = startGame;
         document.getElementById('restart-btn').onclick = startGame;
+
+        // Chained games integration - detect iframe mode and listen for parent messages
+        if (window.parent !== window) {
+            document.body.classList.add('in-iframe');
+            useParentTimer = true;
+            
+            // Hide start screen and auto-start game in iframe mode
+            startScreen.classList.add('hidden');
+            
+            // Initialize timer bar to 100%
+            const timerFill = document.getElementById('timer-bar-fill');
+            if (timerFill) {
+                timerFill.style.width = '100%';
+            }
+            
+            // Auto-start the game immediately
+            setTimeout(() => {
+                startGame();
+            }, 100);
+            
+            // Listen for messages from parent
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'gameTimeout') {
+                    // Timeout received - end game immediately
+                    if (gameActive || isGameRunning) {
+                        timeLeft = 0;
+                        endGame();
+                    }
+                } else if (event.data && event.data.type === 'timeUpdate') {
+                    // Timer update received - update timer bar
+                    timeLeft = event.data.timeLeft;
+                    totalTime = event.data.totalTime;
+                    updateTimerBar();
+                    
+                    // End game when time runs out
+                    if (timeLeft <= 0 && totalTime > 0) {
+                        endGame();
+                    }
+                }
+            });
+        }
     </script>
 </body>
 </html>
