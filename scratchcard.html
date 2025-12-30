@@ -198,14 +198,14 @@
 
         const LEVELS = [
             {
-                name: "Zen Garden",
+                name: "Carte à Gratter - ZEN",
                 icon: "🧘",
                 desc: "Zero bombs. Deep focus required. The foil is heavy and stubborn.",
                 bombs: 0,
                 scratchOpacity: 0.3,
                 threshold: 45,
                 time: 15000,
-                danger: "Zen Mode: 0 Bombs"
+                danger: "Gratte! Gratte! Gratte!"
             },
             {
                 name: "Danger Zone",
@@ -367,7 +367,16 @@
         function completeLevel() {
             state = 'WAITING';
             isDrawing = false;
-            confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+            const boardFrame = document.getElementById('board-frame');
+            const rect = boardFrame.getBoundingClientRect();
+            confetti({ 
+                particleCount: 80, 
+                spread: 60, 
+                origin: { 
+                    x: (rect.left + rect.width / 2) / window.innerWidth, 
+                    y: (rect.top + rect.height / 2) / window.innerHeight 
+                } 
+            });
             
             if (currentLevel < LEVELS.length - 1) {
                 currentLevel++;
@@ -384,7 +393,16 @@
             state = 'ENDED';
             document.getElementById('final-score-display').textContent = `$${totalScore}`;
             endOverlay.classList.remove('hidden-ui');
-            confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
+            const boardFrame = document.getElementById('board-frame');
+            const rect = boardFrame.getBoundingClientRect();
+            confetti({ 
+                particleCount: 200, 
+                spread: 90, 
+                origin: { 
+                    x: (rect.left + rect.width / 2) / window.innerWidth, 
+                    y: (rect.top + rect.height / 2) / window.innerHeight 
+                } 
+            });
         }
 
         function triggerExplosion(p) {

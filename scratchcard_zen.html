@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scratch Card - Zen Garden</title>
+    <title>Carte à Gratter - ZEN</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -168,14 +168,14 @@
         const timerDisplay = document.getElementById('timer-display');
 
         const LEVEL = {
-            name: "Zen Garden",
+            name: "Jeu à Gratter - ZEN",
             icon: "🧘",
             desc: "Zero bombs. Deep focus required. The foil is heavy and stubborn.",
             bombs: 0,
-            scratchOpacity: 0.3,
-            threshold: 45,
+            scratchOpacity: 1.0,
+            threshold: 15,
             time: 15000,
-            danger: "Zen Mode: 0 Bombs"
+            danger: "Gratte! Gratte! Gratte!"
         };
 
         let state = 'READY';
@@ -240,9 +240,9 @@
             ctx.clearRect(0, 0, 320, 320);
 
             const grad = ctx.createLinearGradient(0, 0, 320, 320);
-            grad.addColorStop(0, '#444');
-            grad.addColorStop(0.5, '#777');
-            grad.addColorStop(1, '#444');
+            grad.addColorStop(0, '#888');
+            grad.addColorStop(0.5, '#aaa');
+            grad.addColorStop(1, '#888');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, 320, 320);
 
@@ -320,7 +320,16 @@
 
         function completeLevel() {
             endGame();
-            confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+            const boardFrame = document.getElementById('board-frame');
+            const rect = boardFrame.getBoundingClientRect();
+            confetti({ 
+                particleCount: 80, 
+                spread: 60, 
+                origin: { 
+                    x: (rect.left + rect.width / 2) / window.innerWidth, 
+                    y: (rect.top + rect.height / 2) / window.innerHeight 
+                } 
+            });
         }
 
         function triggerExplosion(p) {
@@ -391,7 +400,7 @@
             const { x, y } = getCoords(e);
             ctx.globalCompositeOperation = 'destination-out';
             ctx.globalAlpha = LEVEL.scratchOpacity;
-            ctx.lineWidth = 50; ctx.lineCap = 'round';
+            ctx.lineWidth = 90; ctx.lineCap = 'round';
             ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
             lastX = x; lastY = y;
             checkSymbols(x, y);
