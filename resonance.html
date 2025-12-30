@@ -337,6 +337,9 @@
             
             // Notify parent if in iframe
             if (window.parent !== window) {
+                // Score should already be incremented when you win (score++ happens on match)
+                // If score is still 0, it means they didn't win, so score stays 0
+                console.log('Resonance: Ending game. Current score:', score, 'isWon:', isWon);
                 window.parent.postMessage({ type: 'gameComplete', game: 'resonance', score: score }, '*');
             }
         }
@@ -347,7 +350,17 @@
 
             const now = Date.now();
             if (isWon) {
-                if (now - winTime > 1500) {
+                // In iframe mode (chained games), end game immediately on win
+                if (useParentTimer) {
+                    // Wait a moment to show the win effect, then end the game
+                    if (now - winTime > 1000) {
+                        // Increment score for the win before ending
+                        if (score === 0) score = 1; // Ensure at least 1 point for winning
+                        endGame();
+                        return;
+                    }
+                } else if (now - winTime > 1500) {
+                    // Standalone mode: auto-restart
                     score++;
                     initLevel();
                 }
@@ -377,6 +390,8 @@
 
                 if (match) {
                     isWon = true; winTime = now;
+                    // Increment score when you win (in chained mode, this will be sent when game ends)
+                    score++;
                     Object.assign(player, target);
                     statusMsg.style.opacity = '1'; statusMsg.style.transform = 'scale(1.2)';
                     for(let i=0; i<60; i++) sparkles.push(new Sparkle());

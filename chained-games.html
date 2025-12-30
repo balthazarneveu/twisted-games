@@ -222,9 +222,7 @@
 </div>
 
     <div id="game-wrapper">
-    <iframe id="pinball-iframe" class="game-iframe" tabindex="0"></iframe>
-    <iframe id="snow-iframe" class="game-iframe" tabindex="0"></iframe>
-    <iframe id="resonance-iframe" class="game-iframe" tabindex="0"></iframe>
+    <!-- Game iframes will be created dynamically based on session configuration -->
 </div>
 
 <div id="transition-overlay">
@@ -243,15 +241,46 @@
     const GAME_TIMEOUTS = {
         pinball: 5,
         snow: 5,
-        resonance: 5
+        resonance: 20
     };
 
-    const games = [
-        { id: 'snow', iframeId: 'snow-iframe', file: 'snow_ninja.html', timeout: GAME_TIMEOUTS.snow },
-        { id: 'resonance', iframeId: 'resonance-iframe', file: 'resonance.html', timeout: GAME_TIMEOUTS.resonance },
-        { id: 'pinball', iframeId: 'pinball-iframe', file: 'pinball_wizard.html', timeout: GAME_TIMEOUTS.pinball },
-
+    // Game session configuration - define the sequence of games to play
+    // You can add the same game multiple times by using different instance IDs
+    const GAME_SESSION = [
+        { gameId: 'resonance', label: 'Resonance 1' },
+        { gameId: 'snow', label: 'Snow Ninja' },
+        { gameId: 'pinball', label: 'Pinball Wizard' },
+        { gameId: 'resonance', label: 'Resonance 2' }
     ];
+
+    // Game definitions - maps game IDs to their files and settings
+    const GAME_DEFINITIONS = {
+        pinball: { file: 'pinball_wizard.html', timeout: GAME_TIMEOUTS.pinball },
+        snow: { file: 'snow_ninja.html', timeout: GAME_TIMEOUTS.snow },
+        resonance: { file: 'resonance.html', timeout: GAME_TIMEOUTS.resonance }
+    };
+
+    // Build games array from session configuration
+    const games = GAME_SESSION.map((sessionItem, index) => {
+        const gameDef = GAME_DEFINITIONS[sessionItem.gameId];
+        if (!gameDef) {
+            console.error('Unknown game ID:', sessionItem.gameId);
+            return null;
+        }
+        
+        // Create unique iframe ID for each instance
+        const instanceId = `${sessionItem.gameId}-${index}`;
+        const iframeId = `${sessionItem.gameId}-iframe-${index}`;
+        
+        return {
+            id: instanceId,
+            gameId: sessionItem.gameId, // Keep original game ID for score tracking
+            iframeId: iframeId,
+            file: gameDef.file,
+            timeout: gameDef.timeout,
+            label: sessionItem.label || sessionItem.gameId
+        };
+    }).filter(g => g !== null);
 
     let currentGameIndex = 0;
     let totalScore = 0;
@@ -263,8 +292,17 @@
     window.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'gameComplete') {
             const { game, score } = event.data;
-            gameScores[game] = score;
+            console.log('Chained Games: Received gameComplete from', game, 'with score:', score);
+            // Use the currently active game instance (currentGameIndex) to track score
+            // This ensures we track the correct instance even if same game appears multiple times
+            const currentGame = games[currentGameIndex];
+            console.log('Chained Games: Current game index:', currentGameIndex, 'Current game:', currentGame);
+            if (currentGame && currentGame.gameId === game) {
+                gameScores[currentGame.id] = score;
+                console.log('Chained Games: Stored score', score, 'for game', currentGame.id);
+            }
             totalScore += score;
+            console.log('Chained Games: Total score is now:', totalScore);
             
             // Clear timeout and interval since game completed naturally
             if (gameTimeoutId) {
@@ -435,7 +473,7 @@
         let breakdownHTML = '<div style="margin-bottom: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 5px;">Score Breakdown</div>';
         games.forEach(game => {
             const score = gameScores[game.id] || 0;
-            const gameName = game.id.charAt(0).toUpperCase() + game.id.slice(1).replace('_', ' ');
+            const gameName = game.label || game.id.charAt(0).toUpperCase() + game.id.slice(1).replace('_', ' ');
             breakdownHTML += `<div style="margin: 10px 0;">${gameName}: <span style="color: #00f2ff; font-weight: 600;">${score.toLocaleString()}</span></div>`;
         });
         finalBreakdown.innerHTML = breakdownHTML;
@@ -606,7 +644,23 @@
         }
     }
 
+    // Create iframes dynamically based on session configuration
+    function createGameIframes() {
+        const gameWrapper = document.getElementById('game-wrapper');
+        games.forEach(game => {
+            const iframe = document.createElement('iframe');
+            iframe.id = game.iframeId;
+            iframe.className = 'game-iframe';
+            iframe.tabIndex = 0;
+            gameWrapper.appendChild(iframe);
+        });
+        console.log('Created', games.length, 'game iframes for session');
+    }
+
     window.addEventListener('load', () => {
+        // Create iframes for all games in the session
+        createGameIframes();
+        
         const fullscreenButton = document.getElementById('fullscreen-button');
         
         // Listen for fullscreen changes
