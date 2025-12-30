@@ -382,28 +382,36 @@
         sort6: 5,
         ride_routine1: 24,
         ride_routine2: 20,
-        ride_routine3: 20
+        ride_routine3: 20,
+        morning_rush1: 20,
+        morning_rush2: 20,
+        morning_rush3: 20,
+        morning_rush4: 20,
+        morning_rush5: 20
     };
 
     // Game session configuration - define the sequence of games to play
     // You can add the same game multiple times by using different instance IDs
     const GAME_SESSION = [
         // { gameId: 'sort', label: 'Speedrun Chronologique' },
+        { gameId: 'morning_rush1', label: 'Morning Rush 1' },
+        { gameId: 'scratchcard_zen', label: 'Gratte Zen' },
         { gameId: 'ride_routine1', label: 'Rider Routine 1' },
         { gameId: 'resonance', label: 'Resonance 2' },
         { gameId: 'pinball', label: 'Pinball Wizard' },
         // { gameId: 'sort6', label: 'Speedrun: La Journée' },
         { gameId: 'scratchcard_zen', label: 'Zen Garden' },
         { gameId: 'santa', label: 'Jumping Santa' },
-
         { gameId: 'ride_routine2', label: 'Rider Routine 2' },
         // { gameId: 'sort2', label: 'Speedrun: Reine des Neiges' },
         { gameId: 'recycle1', label: 'Eco-Tri: Compost' },
         { gameId: 'scratchcard_danger', label: 'Danger Zone' },
+        { gameId: 'morning_rush3', label: 'Morning Rush 3' },
         // { gameId: 'sort1', label: 'Speedrun: Harry Potter' },
         { gameId: 'scratchcard_minefield', label: 'Minefield' },
         // { gameId: 'sort5', label: 'Speedrun: Inventions' },
         { gameId: 'pizza', label: 'Pizza Stack Panic' },
+        { gameId: 'morning_rush2', label: 'Morning Rush 2' },
         // { gameId: 'zen', label: 'Sérénité Absolue' },
         { gameId: 'resonance', label: 'Resonance 1' },
         // { gameId: 'sort4', label: 'Speedrun: Histoire de France' },
@@ -411,9 +419,10 @@
         { gameId: 'snow', label: 'Snow Ninja' },
         { gameId: 'ride_routine3', label: 'Rider Routine 3' },
         { gameId: 'scratchcard_final', label: 'Final Hell' },
+        { gameId: 'morning_rush4', label: 'Morning Rush 4' },
         // { gameId: 'sort3', label: 'Speedrun: Les Saisons' },
         { gameId: 'recycle2', label: 'Eco-Tri: Recyclage' },
-
+        { gameId: 'morning_rush5', label: 'Morning Rush 5' },
     ];
 
     // Game definitions - maps game IDs to their files and settings
@@ -440,7 +449,12 @@
         sort6: { file: 'sort.html?level=5', timeout: GAME_TIMEOUTS.sort6 },
         ride_routine1: { file: 'ride_routine.html?session=1', timeout: GAME_TIMEOUTS.ride_routine1 },
         ride_routine2: { file: 'ride_routine.html?session=2', timeout: GAME_TIMEOUTS.ride_routine2 },
-        ride_routine3: { file: 'ride_routine.html?session=3', timeout: GAME_TIMEOUTS.ride_routine3 }
+        ride_routine3: { file: 'ride_routine.html?session=3', timeout: GAME_TIMEOUTS.ride_routine3 },
+        morning_rush1: { file: 'morning_rush.html?session=1', timeout: GAME_TIMEOUTS.morning_rush1 },
+        morning_rush2: { file: 'morning_rush.html?session=2', timeout: GAME_TIMEOUTS.morning_rush2 },
+        morning_rush3: { file: 'morning_rush.html?session=3', timeout: GAME_TIMEOUTS.morning_rush3 },
+        morning_rush4: { file: 'morning_rush.html?session=4', timeout: GAME_TIMEOUTS.morning_rush4 },
+        morning_rush5: { file: 'morning_rush.html?session=5', timeout: GAME_TIMEOUTS.morning_rush5 }
     };
 
     // Build games array from session configuration

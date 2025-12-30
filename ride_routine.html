@@ -235,27 +235,29 @@
             scoreEl.innerText = state.score;
             state.difficulty = 1 + (state.score * 0.05);
             
-            // Move to next trick index
+            // Move to next trick index (always continue after failure)
             state.currentTrickIndex++;
             
-            // Check if we've completed all tricks (3 tricks total)
+            // Check if we've completed all tricks (all 3 tricks attempted)
             if (state.currentTrickIndex >= TRICK_ORDER.length) {
+                // All tricks attempted - end session regardless of success/failure
                 setTimeout(() => endGame(), 1300);
                 return;
             }
             
-            // Continue to next trick if:
-            // - We haven't completed all tricks yet (checked above)
-            // - Overall session time hasn't run out (in iframe mode)
+            // Always continue to next trick after failure
+            // Only end if overall session time has completely run out
             if (useParentTimer) {
                 if (timeLeft <= 0 && totalTime > 0) {
+                    // Overall session timeout reached - end game
                     setTimeout(() => endGame(), 1300);
                 } else {
                     // Still have time and haven't completed all tricks - continue
+                    // Failure doesn't end the session, always continue to next trick
                     setTimeout(nextLevel, 1300);
                 }
             } else {
-                // Standalone mode - continue to next trick
+                // Standalone mode - continue to next trick (failure doesn't end session)
                 setTimeout(nextLevel, 1300);
             }
         }

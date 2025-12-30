@@ -192,7 +192,7 @@
         maxGames: 3,
         active: false,
         timer: null,
-        lastLevelIdx: -1,
+        currentTrickIndex: 0, // Track which trick we're on (0, 1, 2)
         cleanup: null,
         validate: null,
         trickTimeLeft: TRICK_TIMEOUT_MS,
@@ -256,30 +256,52 @@
         }
     }
 
-    const levels = [
-        { title: "VERSE LA GOUTTE !", init: initEye },
-        { title: "SNOOZE LE RÉVEIL !", init: initSnooze },
-        { title: "SNOOZE À GAUCHE !", init: initSnoozeReverse },
-        { title: "ÉJECTE LE PAIN !", init: initToasterTap },
-        { title: "ARRÊTE LE CAFÉ !", init: initCoffee },
-        { title: "GONFLE LE BALLON !", init: initBalloon },
-        { title: "OUVRE LES VOLETS !", init: initShutters },
-        { title: "FERME LES VOLETS !", init: initShuttersClose },
-        { title: "FERME LES RIDEAUX !", init: initCurtains },
-        { title: "BOUCHON DE CHAMPAGNE !", init: initChampagne },
-        { title: "PRESSE L'ORANGE !", init: initOrangeJuice },
-        { title: "LE SUCRE DANS LE CAFÉ !", init: initSugarDrop },
-        { title: "ALLUME LA LAMPE !", init: initLampSwipe },
-        { title: "BROSSE TES DENTS !", init: initTeethSwipe },
-        { title: "PAS TROP GRILLÉ !", init: initBurnToast },
-        { title: "CUISSON DE L'OEUF !", init: initEggPrecision },
-        { title: "RASE TA BARBE !", init: initShavingSwipe },
-        { title: "AJUSTE LE NOEUD !", init: initTieMatch }
+    // All available levels
+    const allLevels = [
+        { title: "VERSE LA GOUTTE !", init: initEye }, // 0
+        { title: "SNOOZE LE RÉVEIL !", init: initSnooze }, // 1
+        { title: "SNOOZE À GAUCHE !", init: initSnoozeReverse }, // 2
+        { title: "ÉJECTE LE PAIN !", init: initToasterTap }, // 3
+        { title: "ARRÊTE LE CAFÉ !", init: initCoffee }, // 4
+        { title: "GONFLE LE BALLON SANS ECLATER!", init: initBalloon }, // 5
+        { title: "OUVRE LES VOLETS !", init: initShutters }, // 6
+        { title: "FERME LES VOLETS !", init: initShuttersClose }, // 7
+        { title: "FERME LES RIDEAUX !", init: initCurtains }, // 8
+        { title: "BOUCHON DE CHAMPAGNE !", init: initChampagne }, // 9
+        { title: "PRESSE L'ORANGE !", init: initOrangeJuice }, // 10
+        { title: "LE SUCRE DANS LE CAFÉ !", init: initSugarDrop }, // 11
+        { title: "ALLUME LA LAMPE !", init: initLampSwipe }, // 12
+        { title: "BROSSE TES DENTS !", init: initTeethSwipe }, // 13
+        { title: "PAS TROP GRILLÉ !", init: initBurnToast }, // 14
+        { title: "CUISSON DE L'OEUF !", init: initEggPrecision }, // 15
+        { title: "RASE TA BARBE !", init: initShavingSwipe }, // 16
+        { title: "AJUSTE LE NOEUD !", init: initTieMatch } // 17
     ];
+    
+    // Session-specific trick orders (3 tricks per session)
+    // Available tricks: indices 0-17 from allLevels array above
+    // const SESSION_TRICKS = {
+    //     '1': [0, 1, 2],   // Morning Rush 1: Eye, Snooze, Snooze Reverse
+    //     '2': [3, 4, 5],   // Morning Rush 2: Toaster, Coffee, Balloon
+    //     '3': [6, 7, 8]    // Morning Rush 3: Shutters Open, Shutters Close, Curtains
+    // };
+    
+
+    const SESSION_TRICKS = {
+        '1': [1, 16, 3],   // Morning Rush 1: Snooze, Shaving, Toaster
+        '2': [2, 4, 5],   // Morning Rush 2: Snooze Reverse, Coffee, Balloon
+        '3': [6, 14, 12],    // Morning Rush 3: Shutters Open, Toast, Lamp
+        '4': [13, 15, 17], // Morning Rush 4: Teeth Egg, Tie
+        '5': [8, 10, 9],   // Morning Rush 1: Curtains, Orange Juice, Cham
+    };
+
+    // Get the trick order for this session (default to session 1 if invalid)
+    const levels = (SESSION_TRICKS[sessionNum] || SESSION_TRICKS['1']).map(idx => allLevels[idx]);
 
     function initGame() {
         game.score = 0;
         game.gamesCompleted = 0;
+        game.currentTrickIndex = 0; // Reset to first trick
         updateHeader();
         startLevel();
     }
@@ -325,6 +347,12 @@
     }
 
     function startLevel() {
+        // Check if we've completed all tricks (3 tricks total)
+        if (game.currentTrickIndex >= levels.length) {
+            endGame();
+            return;
+        }
+        
         if (game.cleanup) game.cleanup();
         removeAllGlobalListeners();
         clearInterval(game.timer);
@@ -332,52 +360,49 @@
         game.validate = null;
         game.active = true;
 
-        let nextIdx;
-        do {
-            nextIdx = Math.floor(Math.random() * levels.length);
-        } while (nextIdx === game.lastLevelIdx);
-        game.lastLevelIdx = nextIdx;
-
-        const lvl = levels[nextIdx];
+        // Play the next trick in the fixed order
+        const lvl = levels[game.currentTrickIndex];
         instruction.innerText = lvl.title;
         feedback.classList.replace('opacity-100', 'opacity-0');
         
         game.cleanup = lvl.init();
         
-        const duration = Math.max(700, 3200 - (game.score * 60));
-        startTimer(duration);
+        // Always use 5 seconds per trick
+        startTimer();
     }
 
-    function startTimer(duration) {
+    function startTimer() {
         // Reset trick timer for this new trick (always 5 seconds per trick)
         game.trickTimeLeft = game.trickTotalTime;
         timerBar.style.width = '100%';
         
-        const start = Date.now();
+        // Start per-trick timer (always use internal timer for individual tricks)
         game.timer = setInterval(() => {
-            const elapsed = Date.now() - start;
-            const progress = 100 - (elapsed / duration * 100);
-            timerBar.style.width = Math.max(0, progress) + "%";
+            game.trickTimeLeft -= 50;
+            const percentage = (game.trickTimeLeft / game.trickTotalTime) * 100;
+            timerBar.style.width = Math.max(0, Math.min(100, percentage)) + '%';
             
-            // Also update parent timer bar if in iframe mode
-            if (useParentTimer) {
-                updateParentTimerBar();
-                // Check if overall session time has run out
-                if (timeLeft <= 0 && totalTime > 0) {
-                    clearInterval(game.timer);
-                    endGame();
-                    return;
-                }
-            }
-            
-            if (elapsed >= duration) {
+            // Check if this trick timed out
+            if (game.trickTimeLeft <= 0) {
                 clearInterval(game.timer);
+                // Trick timeout - fail this trick but continue to next trick
                 if (game.active) {
                     if (game.validate) game.validate();
                     else handleFail("TROP LENT !");
                 }
             }
-        }, 30);
+        }, 50);
+        
+        // Also update parent timer bar if in iframe mode
+        if (useParentTimer) {
+            updateParentTimerBar();
+            // Check if overall session time has run out
+            if (timeLeft <= 0 && totalTime > 0) {
+                clearInterval(game.timer);
+                endGame();
+                return;
+            }
+        }
     }
 
     function handleSuccess() {
@@ -391,8 +416,11 @@
         feedback.innerText = "PARFAIT !";
         feedback.classList.replace('opacity-0', 'opacity-100');
         
-        // Check if we've completed maxGames - end early!
-        if (game.gamesCompleted >= game.maxGames) {
+        // Move to next trick index
+        game.currentTrickIndex++;
+        
+        // Check if we've completed all tricks (3 tricks total)
+        if (game.currentTrickIndex >= levels.length) {
             setTimeout(() => endGame(), 400);
             return;
         }
@@ -414,19 +442,25 @@
         feedback.innerText = msg;
         feedback.classList.replace('opacity-0', 'opacity-100');
         
-        // Always check maxGames first - if we've reached it, end game
-        if (game.gamesCompleted >= game.maxGames) {
+        // Move to next trick index (always continue after failure)
+        game.currentTrickIndex++;
+        
+        // Check if we've completed all tricks (all 3 tricks attempted)
+        if (game.currentTrickIndex >= levels.length) {
+            // All tricks attempted - end session regardless of success/failure
             setTimeout(() => endGame(), 600);
             return;
         }
         
-        // On failure, check if we should continue or end
-        // If overall session time is up, end the game
-        if (useParentTimer && timeLeft <= 0) {
+        // Always continue to next trick after failure
+        // Only end if overall session time has completely run out
+        if (useParentTimer && timeLeft <= 0 && totalTime > 0) {
+            // Overall session timeout reached - end game
             setTimeout(() => endGame(), 600);
             return;
         }
         
+        // Continue to next trick (failure doesn't end the session)
         setTimeout(() => {
             document.body.classList.remove('fail-bg');
             startLevel();
