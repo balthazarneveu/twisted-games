@@ -298,6 +298,9 @@
         levelIndicator.innerText = config.name;
         document.getElementById('level-desc').innerHTML = config.desc;
         document.getElementById('tutorial-previews').innerHTML = config.target.slice(0,3).map(e => `<span>${e}</span>`).join('');
+        // Center the bin
+        binX = window.innerWidth / 2 - bin.offsetWidth / 2;
+        bin.style.left = binX + 'px';
     }
 
     function handleMove(e) {
@@ -326,6 +329,9 @@
         container.classList.remove('blitz-mode-bg');
         announcer.classList.remove('show-announcement');
         updateLevelUI();
+        // Center the bin initially
+        binX = window.innerWidth / 2 - bin.offsetWidth / 2;
+        bin.style.left = binX + 'px';
         
         // Only start internal timer if not using parent timer
         if (!useParentTimer) {
