@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Morning Rush - Zen Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            touch-action: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            overflow: hidden;
+            background-color: #f8fafc;
+            font-family: 'system-ui', -apple-system, sans-serif;
+        }
+
+        .shake { animation: shake 0.1s infinite; }
+        @keyframes shake {
+            0% { transform: translate(2px, 2px); }
+            50% { transform: translate(-2px, -2px); }
+            100% { transform: translate(2px, 2px); }
+        }
+
+        .drop-anim {
+            animation: fall 0.4s ease-in forwards;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50; 
+            pointer-events: none;
+        }
+        @keyframes fall {
+            0% { top: 110px; opacity: 1; transform: translateX(-50%) scale(0.5); }
+            100% { top: 400px; opacity: 0; }
+        }
+
+        .toast-pop {
+            animation: toastPop 0.6s ease-out forwards;
+        }
+        @keyframes toastPop {
+            0% { transform: translateY(0) rotate(0); opacity: 1; }
+            100% { transform: translateY(-400px) rotate(30deg); opacity: 0; }
+        }
+
+        #timer-bar { transition: width 0.05s linear; }
+        
+        .success-bg { background-color: #dcfce7 !important; transition: background-color 0.2s; }
+        .fail-bg { background-color: #fee2e2 !important; transition: background-color 0.2s; }
+
+        .sugar-cube {
+            width: 50px; height: 50px; background: white;
+            border: 2px solid #ddd; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9px; font-weight: 900; color: #aaa;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+            text-transform: uppercase;
+        }
+
+        .toaster-body {
+            width: 160px; height: 100px; background: #94a3b8;
+            border: 4px solid #475569; border-radius: 20px 20px 8px 8px;
+            position: relative;
+        }
+        
+        .egg-shell {
+            width: 180px; height: 220px; background: #fff;
+            border: 5px solid #e2e8f0;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            position: relative; overflow: hidden;
+        }
+        .egg-yolk {
+            position: absolute; bottom: 0; width: 100%;
+            background: #fbbf24; transition: height 0.1s linear;
+        }
+
+        .shutter {
+            width: 200px; height: 250px; background: #475569;
+            border: 4px solid #1e293b; border-radius: 4px;
+            position: relative; z-index: 20;
+        }
+        .window-bg {
+            width: 190px; height: 240px; background: #fde047;
+            border-radius: 2px; position: absolute; top: 5px; left: 5px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 4rem; z-index: 10;
+        }
+
+        .curtain-panel {
+            width: 50%; height: 100%; background: #991b1b;
+            position: absolute; top: 0; z-index: 20;
+            border: 2px solid #7f1d1d;
+        }
+
+        .cork {
+            width: 24px; height: 32px; background: #a16207;
+            border-radius: 4px 4px 12px 12px;
+            border: 2px solid #713f12;
+            position: absolute;
+        }
+
+        @keyframes big-pop {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(4); opacity: 1; }
+            100% { transform: scale(5); opacity: 0; }
+        }
+        .pop-emoji {
+            animation: big-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            position: absolute; z-index: 100; font-size: 2.5rem;
+        }
+    </style>
+</head>
+<body class="transition-colors duration-200">
+
+<div id="app" class="h-screen flex flex-col items-center justify-between py-10 px-6">
+    <div class="w-full space-y-4">
+        <div class="flex justify-between items-end px-2">
+            <div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">RECORD: <span id="best-score">0</span></div>
+                <div class="text-4xl font-black text-slate-900 italic">SCORE: <span id="score">0</span></div>
+            </div>
+            <div class="text-xs font-bold text-blue-500 uppercase tracking-widest pb-1">Mode Zen</div>
+        </div>
+        <div class="w-full h-4 bg-slate-200 rounded-full border border-slate-300 overflow-hidden shadow-inner">
+            <div id="timer-bar" class="h-full bg-blue-500 w-full"></div>
+        </div>
+    </div>
+
+    <div class="text-center">
+        <h2 id="instruction" class="text-2xl font-black text-slate-800 uppercase italic">Prêt ?</h2>
+        <div id="feedback" class="h-6 font-bold text-blue-600 opacity-0 uppercase text-sm mt-1"></div>
+    </div>
+
+    <div id="stage" class="relative w-full flex-1 flex items-center justify-center overflow-hidden"></div>
+
+    <div class="h-10 flex items-center">
+        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest opacity-40 italic">Morning Rush Zen - v4.7</p>
+    </div>
+
+    <div id="overlay" class="fixed inset-0 bg-slate-900/95 flex items-center justify-center z-[100] text-center p-8">
+        <div class="text-white">
+            <h1 class="text-6xl font-black italic mb-2 tracking-tighter leading-none">MORNING<br>RUSH</h1>
+            <p class="text-blue-400 mb-10 font-bold uppercase text-xs tracking-widest italic">Le brio sans la peur</p>
+            <button id="start-btn" class="bg-blue-600 text-white px-14 py-6 rounded-3xl font-black text-2xl shadow-[0_8px_0_rgb(30,58,138)] active:translate-y-2 active:shadow-none transition-all">
+                C'EST PARTI
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const stage = document.getElementById('stage');
+    const instruction = document.getElementById('instruction');
+    const scoreEl = document.getElementById('score');
+    const bestScoreEl = document.getElementById('best-score');
+    const timerBar = document.getElementById('timer-bar');
+    const overlay = document.getElementById('overlay');
+    const feedback = document.getElementById('feedback');
+    const startBtn = document.getElementById('start-btn');
+
+    let game = {
+        score: 0,
+        bestScore: 0,
+        active: false,
+        timer: null,
+        lastLevelIdx: -1,
+        cleanup: null,
+        validate: null
+    };
+
+    let activeListeners = [];
+
+    function addGlobalListener(target, type, fn) {
+        target.addEventListener(type, fn);
+        activeListeners.push({ target, type, fn });
+    }
+
+    function removeAllGlobalListeners() {
+        activeListeners.forEach(l => l.target.removeEventListener(l.type, l.fn));
+        activeListeners = [];
+    }
+
+    function createExplosion(x, y, color = "#ef4444") {
+        const emoji = document.createElement('div');
+        emoji.className = 'pop-emoji';
+        emoji.innerText = '💥';
+        emoji.style.left = (x - 20) + 'px';
+        emoji.style.top = (y - 20) + 'px';
+        stage.appendChild(emoji);
+        setTimeout(() => emoji.remove(), 700);
+
+        const colors = [color, "#fbbf24", "#ffffff", "#3b82f6"];
+        for (let i = 0; i < 45; i++) {
+            const p = document.createElement('div');
+            p.className = 'absolute pointer-events-none z-[60]';
+            p.style.left = x + 'px';
+            p.style.top = y + 'px';
+            const size = (10 + Math.random() * 15);
+            p.style.width = size + 'px';
+            p.style.height = size + 'px';
+            p.style.background = colors[Math.floor(Math.random() * colors.length)];
+            p.style.borderRadius = Math.random() > 0.3 ? '50%' : '4px';
+            stage.appendChild(p);
+            
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 5 + Math.random() * 12;
+            let vx = Math.cos(angle) * speed;
+            let vy = Math.sin(angle) * speed;
+            let opacity = 1;
+
+            const pLoop = setInterval(() => {
+                const curL = parseFloat(p.style.left);
+                const curT = parseFloat(p.style.top);
+                p.style.left = (curL + vx) + 'px';
+                p.style.top = (curT + vy) + 'px';
+                vy += 0.25;
+                vx *= 0.97;
+                opacity -= 0.02;
+                p.style.opacity = opacity;
+                if (opacity <= 0) {
+                    clearInterval(pLoop);
+                    p.remove();
+                }
+            }, 16);
+        }
+    }
+
+    const levels = [
+        { title: "VERSE LA GOUTTE !", init: initEye },
+        { title: "SNOOZE LE RÉVEIL !", init: initSnooze },
+        { title: "SNOOZE À GAUCHE !", init: initSnoozeReverse },
+        { title: "ÉJECTE LE PAIN !", init: initToasterTap },
+        { title: "ARRÊTE LE CAFÉ !", init: initCoffee },
+        { title: "GONFLE LE BALLON !", init: initBalloon },
+        { title: "OUVRE LES VOLETS !", init: initShutters },
+        { title: "FERME LES VOLETS !", init: initShuttersClose },
+        { title: "FERME LES RIDEAUX !", init: initCurtains },
+        { title: "BOUCHON DE CHAMPAGNE !", init: initChampagne },
+        { title: "PRESSE L'ORANGE !", init: initOrangeJuice },
+        { title: "LE SUCRE DANS LE CAFÉ !", init: initSugarDrop },
+        { title: "ALLUME LA LAMPE !", init: initLampSwipe },
+        { title: "BROSSE TES DENTS !", init: initTeethSwipe },
+        { title: "PAS TROP GRILLÉ !", init: initBurnToast },
+        { title: "CUISSON DE L'OEUF !", init: initEggPrecision },
+        { title: "RASE TA BARBE !", init: initShavingSwipe },
+        { title: "AJUSTE LE NOEUD !", init: initTieMatch }
+    ];
+
+    startBtn.onclick = () => {
+        overlay.classList.add('hidden');
+        initGame();
+    };
+
+    function initGame() {
+        game.score = 0;
+        updateHeader();
+        startLevel();
+    }
+
+    function updateHeader() {
+        scoreEl.innerText = game.score;
+        if (game.score > game.bestScore) {
+            game.bestScore = game.score;
+            bestScoreEl.innerText = game.bestScore;
+        }
+    }
+
+    function startLevel() {
+        if (game.cleanup) game.cleanup();
+        removeAllGlobalListeners();
+        clearInterval(game.timer);
+        stage.innerHTML = "";
+        game.validate = null;
+        game.active = true;
+
+        let nextIdx;
+        do {
+            nextIdx = Math.floor(Math.random() * levels.length);
+        } while (nextIdx === game.lastLevelIdx);
+        game.lastLevelIdx = nextIdx;
+
+        const lvl = levels[nextIdx];
+        instruction.innerText = lvl.title;
+        feedback.classList.replace('opacity-100', 'opacity-0');
+        
+        game.cleanup = lvl.init();
+        
+        const duration = Math.max(700, 3200 - (game.score * 60));
+        startTimer(duration);
+    }
+
+    function startTimer(duration) {
+        const start = Date.now();
+        game.timer = setInterval(() => {
+            const elapsed = Date.now() - start;
+            const progress = 100 - (elapsed / duration * 100);
+            timerBar.style.width = Math.max(0, progress) + "%";
+            
+            if (elapsed >= duration) {
+                clearInterval(game.timer);
+                if (game.active) {
+                    if (game.validate) game.validate();
+                    else handleFail("TROP LENT !");
+                }
+            }
+        }, 30);
+    }
+
+    function handleSuccess() {
+        if (!game.active) return;
+        game.active = false;
+        clearInterval(game.timer);
+        game.score++;
+        updateHeader();
+        document.body.classList.add('success-bg');
+        feedback.innerText = "PARFAIT !";
+        feedback.classList.replace('opacity-0', 'opacity-100');
+        setTimeout(() => {
+            document.body.classList.remove('success-bg');
+            startLevel();
+        }, 400);
+    }
+
+    function handleFail(msg = "RATÉ !") {
+        if (!game.active) return;
+        game.active = false;
+        clearInterval(game.timer);
+        game.score = 0;
+        updateHeader();
+        document.body.classList.add('fail-bg');
+        feedback.innerText = msg;
+        feedback.classList.replace('opacity-0', 'opacity-100');
+        setTimeout(() => {
+            document.body.classList.remove('fail-bg');
+            startLevel();
+        }, 600);
+    }
+
+    // --- 1. OEIL ---
+    function initEye() {
+        let drops = 3;
+        stage.innerHTML = `
+            <div class="flex flex-col items-center">
+                <div class="mb-20 text-6xl" style="transform: rotate(180deg);">🧴</div>
+                <div class="relative">
+                    <svg width="240" height="120" viewBox="0 0 240 120">
+                        <path d="M10 60 Q120 -20 230 60 Q120 140 10 60" fill="white" stroke="#1e293b" stroke-width="6"/>
+                        <circle id="pupil" cx="120" cy="60" r="32" fill="#0f172a"/>
+                    </svg>
+                    <div id="eye-drops" class="absolute -bottom-8 w-full text-center text-blue-500 font-bold">💧💧💧</div>
+                </div>
+            </div>`;
+        const pupil = document.getElementById('pupil');
+        const count = document.getElementById('eye-drops');
+        let angle = 0;
+        const speed = 0.035 + (game.score * 0.001);
+        const loop = setInterval(() => {
+            angle += speed;
+            pupil.setAttribute('cx', 120 + Math.sin(angle) * 70);
+        }, 16);
+        stage.onclick = () => {
+            if (!game.active || drops <= 0) return;
+            drops--;
+            count.innerText = "💧".repeat(drops);
+            const d = document.createElement('div');
+            d.className = 'drop-anim'; d.innerText = '💧';
+            stage.appendChild(d);
+            setTimeout(() => {
+                if (!game.active) return;
+                const px = parseFloat(pupil.getAttribute('cx'));
+                if (Math.abs(px - 120) < 42) handleSuccess();
+                else if (drops === 0) handleFail("VIDE !");
+            }, 350);
+        };
+        return () => { clearInterval(loop); stage.onclick = null; };
+    }
+
+    // --- 2. SNOOZE ---
+    function initSnooze() {
+        stage.innerHTML = `<div class="flex flex-col items-center w-full px-6">
+            <div class="shake text-8xl mb-16">⏰</div>
+            <div id="track" class="w-full h-20 bg-slate-200 rounded-full border-4 border-white shadow-inner flex items-center p-2 overflow-hidden">
+                <div id="handle" class="h-16 w-16 bg-red-500 rounded-full shadow-lg flex items-center justify-center text-white text-2xl font-black">Z</div>
+            </div>
+        </div>`;
+        const h = document.getElementById('handle'), t = document.getElementById('track');
+        let drag = false;
+        const move = (cx) => {
+            if (!drag || !game.active) return;
+            const r = t.getBoundingClientRect();
+            const pos = Math.max(0, Math.min(cx - r.left - 32, t.clientWidth - 80));
+            h.style.transform = `translateX(${pos}px)`;
+            if (pos >= t.clientWidth - 80) handleSuccess();
+        };
+        addGlobalListener(h, 'mousedown', () => drag = true);
+        addGlobalListener(h, 'touchstart', (e) => { e.preventDefault(); drag = true; });
+        addGlobalListener(window, 'mousemove', (e) => move(e.clientX));
+        addGlobalListener(window, 'touchmove', (e) => move(e.touches[0].clientX));
+        addGlobalListener(window, 'mouseup', () => { drag = false; if (game.active) h.style.transform = "translateX(0)"; });
+        addGlobalListener(window, 'touchend', () => { drag = false; if (game.active) h.style.transform = "translateX(0)"; });
+        return () => {};
+    }
+
+    // --- 3. SNOOZE REVERSE ---
+    function initSnoozeReverse() {
+        stage.innerHTML = `<div class="flex flex-col items-center w-full px-6">
+            <div class="shake text-8xl mb-16">⏰</div>
+            <div id="track" class="w-full h-20 bg-slate-200 rounded-full border-4 border-white shadow-inner flex items-center p-2 overflow-hidden relative">
+                <div id="handle" class="h-16 w-16 bg-blue-500 rounded-full shadow-lg flex items-center justify-center text-white text-2xl font-black absolute" style="right: 8px;">Z</div>
+                <div class="absolute inset-0 flex items-center justify-center text-slate-400 font-bold opacity-30 text-[10px] uppercase pointer-events-none uppercase tracking-widest"><<< SNOOZE</div>
+            </div>
+        </div>`;
+        const h = document.getElementById('handle'), t = document.getElementById('track');
+        let drag = false;
+        const move = (cx) => {
+            if (!drag || !game.active) return;
+            const r = t.getBoundingClientRect();
+            const limit = t.clientWidth - 80;
+            const offset = r.right - cx - 32;
+            const pos = Math.max(0, Math.min(offset, limit));
+            h.style.transform = `translateX(-${pos}px)`;
+            if (pos >= limit) handleSuccess();
+        };
+        addGlobalListener(h, 'mousedown', () => drag = true);
+        addGlobalListener(h, 'touchstart', (e) => { e.preventDefault(); drag = true; });
+        addGlobalListener(window, 'mousemove', (e) => move(e.clientX));
+        addGlobalListener(window, 'touchmove', (e) => move(e.touches[0].clientX));
+        addGlobalListener(window, 'mouseup', () => { drag = false; if (game.active) h.style.transform = "translateX(0)"; });
+        addGlobalListener(window, 'touchend', () => { drag = false; if (game.active) h.style.transform = "translateX(0)"; });
+        return () => {};
+    }
+
+    // --- 4. TOASTER TAP ---
+    function initToasterTap() {
+        stage.innerHTML = `<div class="flex flex-col items-center">
+            <div class="flex gap-4 mb-2"><div class="toast text-7xl opacity-0">🍞</div><div class="toast text-7xl opacity-0">🍞</div></div>
+            <div id="toaster" class="toaster-body"><div class="toaster-slot"></div></div>
+        </div>`;
+        const toaster = document.getElementById('toaster');
+        let c = 0;
+        stage.onclick = () => {
+            if (!game.active) return;
+            c++; toaster.classList.add('shake'); setTimeout(() => toaster.classList.remove('shake'), 50);
+            if (c >= 8) {
+                document.querySelectorAll('.toast').forEach(t => t.classList.add('toast-pop', 'opacity-100'));
+                handleSuccess();
+            }
+        };
+        return () => { stage.onclick = null; };
+    }
+
+    // --- 5. COFFEE ---
+    function initCoffee() {
+        stage.innerHTML = `<div class="relative w-44 h-64 border-b-8 border-x-8 border-slate-400 rounded-b-[45px] bg-white/20 overflow-hidden shadow-xl">
+            <div id="liq" class="absolute bottom-0 left-0 w-full bg-[#3e2723] h-0"></div>
+            <div id="tz" class="absolute bottom-[72%] left-0 w-full h-[18%] bg-green-500/30 border-y-2 border-green-500 transition-colors duration-200"></div>
+        </div>`;
+        const liq = document.getElementById('liq'), tz = document.getElementById('tz');
+        let h = 0;
+        const flow = setInterval(() => {
+            h += (1.2 + (game.score * 0.1));
+            liq.style.height = h + "%";
+            if (h > 100) { clearInterval(flow); handleFail("DÉBORDÉ !"); }
+        }, 16);
+        stage.onclick = () => { if (game.active) { clearInterval(flow); if (h >= 71 && h <= 92) handleSuccess(); else handleFail("MAUVAIS MOMENT"); } };
+        return () => { clearInterval(flow); stage.onclick = null; };
+    }
+
+    // --- 6. BALLOON ---
+    function initBalloon() {
+        stage.innerHTML = `<div class="relative flex items-center justify-center h-64 w-64">
+            <div class="absolute text-8xl opacity-10 grayscale" style="transform: scale(2.0)">🎈</div>
+            <div id="pb" class="text-8xl transition-transform duration-100 origin-center z-10" style="transform: scale(0.4)">🎈</div>
+        </div>`;
+        const pb = document.getElementById('pb');
+        let s = 0.4;
+        stage.onclick = () => { 
+            if (!game.active) return; 
+            s += 0.22; 
+            pb.style.transform = `scale(${s})`; 
+            if (s > 2.25) {
+                const rect = pb.getBoundingClientRect();
+                createExplosion(rect.left + rect.width/2, rect.top + rect.height/2, "#f87171");
+                pb.style.display = "none";
+                handleFail("BOUM !"); 
+            }
+        };
+        game.validate = () => { if (s >= 1.6 && s <= 2.25) handleSuccess(); else handleFail("TROP PETIT"); };
+        return () => stage.onclick = null;
+    }
+
+    // --- 7. SHUTTERS ---
+    function initShutters() {
+        stage.innerHTML = `<div class="relative flex flex-col items-center"><div class="window-bg">☀️</div><div id="shutter" class="shutter flex flex-col items-center justify-center gap-2"><div class="w-full h-1 bg-slate-900/20"></div><div class="text-white opacity-40 font-bold uppercase text-xs tracking-widest">▲ SWIPE ▲</div></div></div>`;
+        const sh = document.getElementById('shutter');
+        let sy = 0, drag = false;
+        const move = (cy) => {
+            if (!drag || !game.active) return;
+            const pos = Math.max(0, Math.min(sy - cy, 250));
+            sh.style.transform = `translateY(-${pos}px)`;
+            if (pos >= 220) handleSuccess();
+        };
+        addGlobalListener(sh, 'mousedown', (e) => { drag = true; sy = e.clientY; });
+        addGlobalListener(sh, 'touchstart', (e) => { e.preventDefault(); drag = true; sy = e.touches[0].clientY; });
+        addGlobalListener(window, 'mousemove', (e) => move(e.clientY));
+        addGlobalListener(window, 'touchmove', (e) => move(e.touches[0].clientY));
+        addGlobalListener(window, 'mouseup', () => { drag = false; if (game.active) sh.style.transform = "translateY(0)"; });
+        addGlobalListener(window, 'touchend', () => { drag = false; if (game.active) sh.style.transform = "translateY(0)"; });
+        return () => {};
+    }
+
+    // --- 8. SHUTTERS CLOSE ---
+    function initShuttersClose() {
+        stage.innerHTML = `<div class="relative flex flex-col items-center"><div class="window-bg">☀️</div><div id="shutter" class="shutter flex flex-col items-center justify-center gap-2" style="transform: translateY(-250px)"><div class="w-full h-1 bg-slate-900/20"></div><div class="text-white opacity-40 font-bold uppercase text-xs tracking-widest">▼ SWIPE ▼</div></div></div>`;
+        const sh = document.getElementById('shutter');
+        let sy = 0, drag = false;
+        const move = (cy) => {
+            if (!drag || !game.active) return;
+            const diff = cy - sy;
+            const pos = Math.max(0, Math.min(diff, 250));
+            sh.style.transform = `translateY(${-250 + pos}px)`;
+            if (pos >= 220) handleSuccess();
+        };
+        addGlobalListener(sh, 'mousedown', (e) => { drag = true; sy = e.clientY; });
+        addGlobalListener(sh, 'touchstart', (e) => { e.preventDefault(); drag = true; sy = e.touches[0].clientY; });
+        addGlobalListener(window, 'mousemove', (e) => move(e.clientY));
+        addGlobalListener(window, 'touchmove', (e) => move(e.touches[0].clientY));
+        addGlobalListener(window, 'mouseup', () => { drag = false; if (game.active) sh.style.transform = "translateY(-250px)"; });
+        addGlobalListener(window, 'touchend', () => { drag = false; if (game.active) sh.style.transform = "translateY(-250px)"; });
+        return () => {};
+    }
+
+    // --- 9. CURTAINS ---
+    function initCurtains() {
+        stage.innerHTML = `
+            <div class="relative w-64 h-80 flex flex-col items-center border-4 border-slate-300 overflow-hidden">
+                <div class="absolute inset-0 flex items-center justify-center text-4xl">☀️</div>
+                <div id="c-left" class="curtain-panel left-0" style="transform: translateX(-100%)"></div>
+                <div id="c-right" class="curtain-panel right-0" style="transform: translateX(100%)"></div>
+                <div class="absolute bottom-4 text-slate-400 font-bold uppercase text-xs z-30">◀ FERME ▶</div>
+            </div>`;
+        const cl = document.getElementById('c-left'), cr = document.getElementById('c-right');
+        let sx = 0, drag = false;
+        const move = (cx) => {
+            if (!drag || !game.active) return;
+            const diff = Math.abs(cx - sx);
+            const pos = Math.max(0, Math.min(diff, 64)); 
+            const progress = pos / 64;
+            cl.style.transform = `translateX(${-100 + (progress * 100)}%)`;
+            cr.style.transform = `translateX(${100 - (progress * 100)}%)`;
+            if (progress >= 0.9) handleSuccess();
+        };
+        addGlobalListener(stage, 'mousedown', (e) => { drag = true; sx = e.clientX; });
+        addGlobalListener(stage, 'touchstart', (e) => { e.preventDefault(); drag = true; sx = e.touches[0].clientX; });
+        addGlobalListener(window, 'mousemove', (e) => move(e.clientX));
+        addGlobalListener(window, 'touchmove', (e) => move(e.touches[0].clientX));
+        addGlobalListener(window, 'mouseup', () => { drag = false; });
+        addGlobalListener(window, 'touchend', () => { drag = false; });
+        return () => {};
+    }
+
+    // --- 10. CHAMPAGNE (Bouchon dessiné) ---
+    function initChampagne() {
+        stage.innerHTML = `
+            <div class="flex flex-col items-center relative">
+                <div id="cork" class="cork" style="top: 0px; transform: translateX(-50%); left: 50%; z-index: 10;"></div>
+                <div id="bottle" class="text-9xl mt-[20px] active:scale-95 transition-transform z-20">🍾</div>
+                <p class="mt-4 font-black text-blue-500 uppercase text-xs tracking-widest italic">TAPOTE LA BOUTEILLE !</p>
+            </div>`;
+        const cork = document.getElementById('cork');
+        const bottle = document.getElementById('bottle');
+        let pressure = 0;
+        bottle.onclick = (e) => {
+            if (!game.active) return;
+            e.stopPropagation();
+            pressure++;
+            bottle.classList.add('shake');
+            setTimeout(() => bottle.classList.remove('shake'), 50);
+            if (pressure >= 10) {
+                const rect = cork.getBoundingClientRect();
+                createExplosion(rect.left + rect.width/2, rect.top + rect.height/2, "#d4d4d8");
+                cork.style.transform = "translateY(-600px) rotate(720deg)";
+                cork.style.transition = "transform 0.6s cubic-bezier(0.1, 0, 0.3, 1)";
+                handleSuccess();
+            }
+        };
+        return () => { bottle.onclick = null; };
+    }
+
+    // --- 11. ORANGE JUICE ---
+    function initOrangeJuice() {
+        stage.innerHTML = `
+            <div class="flex flex-col items-center">
+                <div id="orange" class="text-7xl mb-12 active:scale-95 transition-transform">🍊</div>
+                <div class="relative w-32 h-44 border-b-8 border-x-8 border-slate-300 rounded-b-2xl bg-white/20 overflow-hidden">
+                    <div id="juice" class="absolute bottom-0 left-0 w-full bg-orange-400 h-0 transition-all duration-100"></div>
+                    <div class="absolute bottom-[75%] left-0 w-full h-[15%] bg-green-500/20 border-y-2 border-green-500"></div>
+                </div>
+                <p class="mt-4 font-black text-orange-500 uppercase text-xs tracking-widest italic">TAPOTE L'ORANGE !</p>
+            </div>`;
+        const juice = document.getElementById('juice'), orange = document.getElementById('orange');
+        let h = 0;
+        stage.onclick = () => {
+            if (!game.active) return;
+            h += 7;
+            juice.style.height = h + "%";
+            orange.classList.add('shake'); setTimeout(() => orange.classList.remove('shake'), 50);
+            if (h > 100) handleFail("DÉBORDÉ !");
+        };
+        game.validate = () => { if (h >= 70 && h <= 95) handleSuccess(); else handleFail("PAS ASSEZ !"); };
+        return () => { stage.onclick = null; };
+    }
+
+    // --- 12. SUGAR ---
+    function initSugarDrop() {
+        stage.innerHTML = `<div class="flex flex-col items-center"><div class="mb-24 text-7xl" style="transform: scaleX(-1);">🤲</div><div id="cup" class="relative w-32 h-24 bg-slate-100 border-x-4 border-b-8 border-slate-300 rounded-b-3xl"><div class="absolute inset-x-2 top-2 h-4 bg-amber-900/20 rounded-full blur-sm"></div></div><div id="sc" class="mt-4 sugar-cube">SUCRE</div></div>`;
+        const cup = document.getElementById('cup');
+        let px = 0;
+        const loop = setInterval(() => { px += (0.03 + (game.score * 0.002)); cup.style.transform = `translateX(${Math.sin(px) * 80}px)`; }, 16);
+        stage.onclick = () => {
+            if (!game.active) return;
+            const s = document.createElement('div'); s.className = 'drop-anim sugar-cube'; s.innerText = 'SUCRE';
+            stage.appendChild(s);
+            setTimeout(() => {
+                if (!game.active) return;
+                const cr = cup.getBoundingClientRect(), sr = s.getBoundingClientRect();
+                if (Math.abs(sr.left - cr.left - 40) < 55) handleSuccess(); else handleFail("À CÔTÉ");
+            }, 350);
+        };
+        return () => { clearInterval(loop); stage.onclick = null; };
+    }
+
+    // --- 13. LAMP SWIPE ---
+    function initLampSwipe() {
+        stage.innerHTML = `<div class="flex flex-col items-center w-full px-6"><div id="l" class="text-8xl mb-16 grayscale opacity-50">💡</div><div id="t" class="w-full h-24 bg-slate-200 rounded-2xl border-4 border-white shadow-inner flex items-center p-2 overflow-hidden"><div id="h" class="h-16 w-16 bg-blue-500 rounded-lg shadow-lg flex items-center justify-center text-white text-3xl font-black">🔌</div></div></div>`;
+        const h = document.getElementById('h'), t = document.getElementById('t'), l = document.getElementById('l');
+        let drag = false;
+        const move = (cx) => {
+            if (!drag || !game.active) return;
+            const r = t.getBoundingClientRect();
+            const p = Math.max(0, Math.min(cx - r.left - 32, t.clientWidth - 85));
+            h.style.transform = `translateX(${p}px)`;
+            if (p >= t.clientWidth - 85) { l.style.filter = "none"; l.style.opacity = "1"; handleSuccess(); }
+        };
+        addGlobalListener(h, 'mousedown', () => drag = true);
+        addGlobalListener(h, 'touchstart', (e) => { e.preventDefault(); drag = true; });
+        addGlobalListener(window, 'mousemove', (e) => move(e.clientX));
+        addGlobalListener(window, 'touchmove', (e) => move(e.touches[0].clientX));
+        addGlobalListener(window, 'mouseup', () => { drag = false; if (game.active) h.style.transform = "translateX(0)"; });
+        addGlobalListener(window, 'touchend', () => { drag = false; if (game.active) h.style.transform = "translateX(0)"; });
+        return () => {};
+    }
+
+    // --- 14. TEETH SWIPE ---
+    function initTeethSwipe() {
+        stage.innerHTML = `<div id="tc" class="flex flex-col items-center w-full relative h-full justify-center"><div id="m" class="text-9xl mb-4 relative transition-transform">👄<div id="d" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-5xl opacity-80">☁️</div><div id="sl" class="absolute inset-0 pointer-events-none"></div></div><div id="br" class="text-7xl absolute pointer-events-none" style="top: 50%; left: 50%; transform: translate(-50%, -50%);">🪥</div><p class="mt-4 font-black text-blue-400 uppercase text-xs tracking-tighter italic">◀ FROTTE ▶</p></div>`;
+        const tc = document.getElementById('tc'), d = document.getElementById('d'), m = document.getElementById('m'), br = document.getElementById('br'), sl = document.getElementById('sl');
+        let lx = 0, ld = 0, ch = 0, di = 0;
+        const move = (x) => {
+            if (!game.active) return;
+            const diff = x - lx;
+            if (Math.abs(diff) < 5) return;
+            const cd = diff > 0 ? 1 : -1;
+            if (ld !== 0 && cd !== ld) ch++;
+            ld = cd; di += Math.abs(diff);
+            const r = tc.getBoundingClientRect();
+            br.style.left = Math.max(10, Math.min(x - r.left - 40, r.width - 80)) + "px";
+            br.style.transform = "translate(0, -50%)";
+            lx = x; m.style.transform = `translateX(${Math.sin(di/20)*10}px)`;
+            d.style.opacity = 0.8 - (ch / 4);
+            if (ch >= 4) {
+                br.style.display = "none"; d.style.opacity = 0;
+                for(let i=0; i<3; i++){ const s = document.createElement('span'); s.className='sparkle'; s.innerText='✨'; s.style.left=Math.random()*100+"%"; s.style.top=Math.random()*100+"%"; sl.appendChild(s); }
+                setTimeout(handleSuccess, 300);
+            }
+        };
+        addGlobalListener(tc, 'mousedown', (e) => lx = e.clientX);
+        addGlobalListener(tc, 'touchstart', (e) => { e.preventDefault(); lx = e.touches[0].clientX; });
+        addGlobalListener(window, 'mousemove', (e) => move(e.clientX));
+        addGlobalListener(window, 'touchmove', (e) => move(e.touches[0].clientX));
+        return () => {};
+    }
+
+    // --- 15. BURN TOAST ---
+    function initBurnToast() {
+        stage.innerHTML = `<div class="relative flex flex-col items-center"><div id="ti" class="text-8xl mb-4 transition-all">🍞</div><div class="w-44 h-8 bg-slate-200 rounded-full border-4 border-slate-300 relative overflow-hidden"><div id="hb" class="h-full bg-orange-500 w-0"></div><div class="absolute inset-y-0 left-[65%] w-[20%] bg-green-500/40 border-x-2 border-green-500"></div></div><p class="mt-4 text-slate-500 font-bold uppercase text-xs tracking-widest italic">CLIQUE AU VERT !</p></div>`;
+        const hb = document.getElementById('hb'), ti = document.getElementById('ti');
+        let p = 0; const s = 0.6 + (game.score * 0.04);
+        const loop = setInterval(() => {
+            p += s; hb.style.width = p + "%";
+            if (p > 50) ti.style.filter = `sepia(${(p-50)/50})`;
+            if (p >= 100) { clearInterval(loop); ti.innerText = "🔥"; handleFail("TROP CUIT"); }
+        }, 16);
+        stage.onclick = () => { if (game.active) { clearInterval(loop); if (p >= 65 && p <= 85) handleSuccess(); else handleFail("RATÉ"); } };
+        return () => { clearInterval(loop); stage.onclick = null; };
+    }
+
+    // --- 16. EGG ---
+    function initEggPrecision() {
+        stage.innerHTML = `<div class="flex flex-col items-center"><div class="egg-shell"><div id="l" class="egg-yolk" style="height: 0%"></div><div id="tz" class="absolute bottom-[70%] left-0 w-full h-[15%] bg-blue-500/20 border-y-2 border-green-500"></div></div><div class="mt-6 text-4xl animate-bounce">🔥</div></div>`;
+        const l = document.getElementById('l');
+        let h = 0; const s = 0.8 + (game.score * 0.04);
+        const loop = setInterval(() => {
+            h += s; l.style.height = h + "%";
+            if (h > 100) { clearInterval(loop); handleFail("BRULÉ"); }
+        }, 16);
+        stage.onclick = () => { if (game.active) { clearInterval(loop); if (h >= 69 && h <= 86) handleSuccess(); else handleFail("CRU"); } };
+        return () => { clearInterval(loop); stage.onclick = null; };
+    }
+
+    // --- 17. SHAVING ---
+    function initShavingSwipe() {
+        stage.innerHTML = `<div id="sc" class="flex flex-col items-center w-full relative h-full justify-center"><div id="f" class="text-9xl mb-4 relative">🧔<div id="fm" class="absolute inset-0 flex items-center justify-center text-6xl opacity-90">☁️☁️</div></div><div id="rz" class="text-7xl absolute pointer-events-none" style="top: 60%; left: 50%; transform: translate(-50%, -50%);">🪒</div><p class="mt-4 font-black text-blue-400 uppercase text-xs tracking-widest italic">◀ RASER ▶</p></div>`;
+        const sc = document.getElementById('sc'), fm = document.getElementById('fm'), f = document.getElementById('f'), rz = document.getElementById('rz');
+        let lx = 0, ld = 0, ch = 0, di = 0;
+        const move = (x) => {
+            if (!game.active) return;
+            const diff = x - lx; if (Math.abs(diff) < 5) return;
+            const cd = diff > 0 ? 1 : -1; if (ld !== 0 && cd !== ld) ch++;
+            ld = cd; di += Math.abs(diff);
+            const r = sc.getBoundingClientRect(); rz.style.left = Math.max(10, Math.min(x - r.left - 40, r.width - 80)) + "px";
+            lx = x; f.style.transform = `translateX(${Math.sin(di/20)*5}px)`; fm.style.opacity = 0.9 - (ch / 4);
+            if (ch >= 4) { f.innerText = "👨"; handleSuccess(); }
+        };
+        addGlobalListener(sc, 'mousedown', (e) => lx = e.clientX);
+        addGlobalListener(sc, 'touchstart', (e) => { e.preventDefault(); lx = e.touches[0].clientX; });
+        addGlobalListener(window, 'mousemove', (e) => move(e.clientX));
+        addGlobalListener(window, 'touchmove', (e) => move(e.touches[0].clientX));
+        return () => {};
+    }
+
+    // --- 18. TIE MATCH ---
+    function initTieMatch() {
+        stage.innerHTML = `<div class="relative flex items-center justify-center h-64 w-64"><div class="absolute text-8xl opacity-10 grayscale" style="transform: scale(2.0)">🎀</div><div id="pt" class="text-8xl transition-transform duration-100 z-10" style="transform: scale(0.4)">🎀</div></div>`;
+        const pt = document.getElementById('pt');
+        let s = 0.4;
+        stage.onclick = () => { if (!game.active) return; s += 0.22; pt.style.transform = `scale(${s})`; if (s > 2.25) { const rect = pt.getBoundingClientRect(); createExplosion(rect.left + rect.width/2, rect.top + rect.height/2, "#f472b6"); pt.style.display = "none"; handleFail("EXPLOSION !"); } };
+        game.validate = () => { if (s >= 1.6 && s <= 2.25) handleSuccess(); else handleFail("TROP PETIT"); };
+        return () => stage.onclick = null;
+    }
+
+    document.addEventListener('touchstart', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+</script>
+</body>
+</html>
