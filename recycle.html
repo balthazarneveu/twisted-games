@@ -151,10 +151,46 @@
             40% { opacity: 1; transform: translateY(-40px) scale(1.2); }
             100% { transform: translateY(-100px) scale(1); opacity: 0; }
         }
+        
+        #timer-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            width: 100%;
+            z-index: 1000;
+            overflow: hidden;
+        }
+        
+        #timer-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff 0%, #00ffff 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+        
+        /* Detect iframe mode */
+        body.in-iframe {
+            margin: 0;
+            padding: 0;
+        }
+        
+        body.in-iframe #game-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        body.in-iframe #overlay {
+            position: fixed;
+        }
     </style>
 </head>
 <body>
 
+<div id="timer-bar">
+    <div id="timer-bar-fill"></div>
+</div>
 <div id="game-container" class="bg-level-1">
     <div id="announcer">MODE BLITZ !</div>
     <div id="level-indicator">NIVEAU 1 : COMPOST</div>
@@ -205,8 +241,20 @@
     let spawnInterval = 1400;
     let binX = window.innerWidth / 2 - 50;
     let isBlitz = false;
-    let currentLevel = 1;
+    
+    // Read level from URL parameter, default to 1
+    const urlParams = new URLSearchParams(window.location.search);
+    const levelParam = urlParams.get('level');
+    let currentLevel = levelParam ? parseInt(levelParam, 10) : 1;
+    // Ensure level is between 1 and 3
+    if (currentLevel < 1 || currentLevel > 3 || isNaN(currentLevel)) {
+        currentLevel = 1;
+    }
+    
     let spawnCount = 0;
+    let useParentTimer = false;
+    let totalTime = 0;
+    let gameId = 'recycle'; // Default game ID, will be set based on level in iframe mode
 
     const LEVELS = {
         1: {
@@ -278,8 +326,13 @@
         container.classList.remove('blitz-mode-bg');
         announcer.classList.remove('show-announcement');
         updateLevelUI();
+        
+        // Only start internal timer if not using parent timer
+        if (!useParentTimer) {
+            startTimer();
+        }
+        
         requestAnimationFrame(update);
-        startTimer();
     }
 
     function startTimer() {
@@ -300,8 +353,42 @@
         setTimeout(() => announcer.classList.remove('show-announcement'), 1500);
     }
 
+    function updateTimerBar() {
+        const timerFill = document.getElementById('timer-bar-fill');
+        if (!timerFill) return;
+        
+        const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+        timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+        
+        // Optional: Change color when time is running low
+        if (percentage < 20) {
+            timerFill.style.background = '#ff0000';
+        } else if (percentage < 50) {
+            timerFill.style.background = '#ff9800';
+        } else {
+            timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+        }
+    }
+
     function endGame() {
+        if (!gameActive) return;
         gameActive = false;
+        
+        // Stop game loop
+        items.forEach(item => item.el.remove());
+        items = [];
+        
+        // Notify parent if in iframe
+        if (window.parent !== window) {
+            window.parent.postMessage({ 
+                type: 'gameComplete', 
+                game: gameId,
+                score: score 
+            }, '*');
+            return; // Don't show overlay in iframe mode
+        }
+        
+        // Show overlay only in standalone mode
         overlay.style.display = 'flex';
         const finalStats = document.getElementById('final-stats');
         const overlayTitle = document.getElementById('overlay-title');
@@ -311,6 +398,7 @@
         document.getElementById('final-score').innerText = score;
         instructions.classList.add('hidden');
 
+        // In standalone mode, allow level progression
         if (score >= 100) {
             if (currentLevel < 3) {
                 overlayTitle.innerText = "NIVEAU RÉUSSI !";
@@ -391,8 +479,10 @@
         if (timestamp - lastSpawn > spawnInterval) {
             spawn();
             lastSpawn = timestamp;
-            if (timeLeft > 15) spawnInterval = 1400 - (15 - (timeLeft - 15)) * 50;
-            else if (timeLeft > 7) spawnInterval = 650 - (8 - (timeLeft - 7)) * 40;
+            // Use timeLeft (works with both parent timer and internal timer)
+            const currentTime = timeLeft;
+            if (currentTime > 15) spawnInterval = 1400 - (15 - (currentTime - 15)) * 50;
+            else if (currentTime > 7) spawnInterval = 650 - (8 - (currentTime - 7)) * 40;
             else spawnInterval = 140; 
         }
 
@@ -423,11 +513,75 @@
                 items.splice(i, 1);
             }
         }
+        
+        // Update timer bar if using parent timer
+        if (useParentTimer) {
+            updateTimerBar();
+        }
+        
         requestAnimationFrame(update);
     }
 
     startBtn.addEventListener('click', startGame);
     updateLevelUI(); // Init au chargement
+    
+    // Detect iframe mode and listen for parent messages
+    if (window.parent !== window) {
+        document.body.classList.add('in-iframe');
+        useParentTimer = true;
+        gameActive = true;
+        
+        // Set gameId based on level for proper score tracking
+        if (currentLevel === 1) {
+            gameId = 'recycle1';
+        } else if (currentLevel === 2) {
+            gameId = 'recycle2';
+        } else if (currentLevel === 3) {
+            gameId = 'recycle3';
+        }
+        
+        // Initialize timer bar to 100%
+        const timerFill = document.getElementById('timer-bar-fill');
+        if (timerFill) {
+            timerFill.style.width = '100%';
+        }
+        
+        // Hide overlay in iframe mode
+        overlay.style.display = 'none';
+        
+        // Listen for messages from parent
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'gameTimeout') {
+                // Timeout received - end game immediately
+                if (gameActive) {
+                    timeLeft = 0;
+                    endGame();
+                }
+            } else if (event.data && event.data.type === 'timeUpdate') {
+                // Timer update received - update timer bar
+                timeLeft = event.data.timeLeft;
+                totalTime = event.data.totalTime;
+                updateTimerBar();
+                
+                // Update timer display
+                timerElement.innerText = Math.ceil(timeLeft);
+                
+                // Trigger blitz mode at 7 seconds
+                if (Math.ceil(timeLeft) === 7 && !isBlitz) {
+                    triggerBlitz();
+                }
+                
+                // End game when time runs out
+                if (timeLeft <= 0 && totalTime > 0) {
+                    endGame();
+                }
+            }
+        });
+        
+        // Start game immediately in iframe mode
+        updateLevelUI();
+        requestAnimationFrame(update);
+    }
 </script>
 </body>
 </html>

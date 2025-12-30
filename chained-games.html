@@ -241,23 +241,34 @@
     const GAME_TIMEOUTS = {
         pinball: 5,
         snow: 5,
-        resonance: 20
+        resonance: 12,
+        recycle1: 8,
+        recycle2: 8,
+        recycle3: 8
     };
 
     // Game session configuration - define the sequence of games to play
     // You can add the same game multiple times by using different instance IDs
     const GAME_SESSION = [
+        { gameId: 'recycle1', label: 'Eco-Tri: Compost' },
+
         { gameId: 'resonance', label: 'Resonance 1' },
+        { gameId: 'recycle3', label: 'Eco-Tri: Encombrants' },
         { gameId: 'snow', label: 'Snow Ninja' },
+        { gameId: 'recycle2', label: 'Eco-Tri: Recyclage' },
         { gameId: 'pinball', label: 'Pinball Wizard' },
-        { gameId: 'resonance', label: 'Resonance 2' }
+        { gameId: 'resonance', label: 'Resonance 2' },
+
     ];
 
     // Game definitions - maps game IDs to their files and settings
     const GAME_DEFINITIONS = {
         pinball: { file: 'pinball_wizard.html', timeout: GAME_TIMEOUTS.pinball },
         snow: { file: 'snow_ninja.html', timeout: GAME_TIMEOUTS.snow },
-        resonance: { file: 'resonance.html', timeout: GAME_TIMEOUTS.resonance }
+        resonance: { file: 'resonance.html', timeout: GAME_TIMEOUTS.resonance },
+        recycle1: { file: 'recycle.html?level=1', timeout: GAME_TIMEOUTS.recycle1 },
+        recycle2: { file: 'recycle.html?level=2', timeout: GAME_TIMEOUTS.recycle2 },
+        recycle3: { file: 'recycle.html?level=3', timeout: GAME_TIMEOUTS.recycle3 }
     };
 
     // Build games array from session configuration
