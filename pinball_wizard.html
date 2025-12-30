@@ -258,6 +258,11 @@
         const container = document.getElementById('game-container');
         const isFullscreen = window.parent !== window;
         
+        // Limit pixel ratio for better performance on high-DPI devices (like Pixel 8a)
+        // Cap at 2.0 to prevent excessive rendering overhead
+        const maxPixelRatio = 2.0;
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+        
         render = Render.create({
             element: container,
             engine: engine,
@@ -266,7 +271,15 @@
                 height: HEIGHT,
                 wireframes: false,
                 background: 'transparent',
-                pixelRatio: window.devicePixelRatio || 1
+                pixelRatio: pixelRatio,
+                // Performance optimizations
+                showVelocity: false,
+                showAngleIndicator: false,
+                showIds: false,
+                showVertexNumbers: false,
+                showCollisions: false,
+                showSeparations: false,
+                showBounds: false
             }
         });
         
@@ -280,32 +293,33 @@
             const ctx = render.context;
             time += 0.02;
 
-            // Background Geometric Style Lines
+            // Background Geometric Style Lines - Optimized with batch operations
             ctx.save();
             ctx.strokeStyle = 'rgba(188, 19, 254, 0.15)';
             ctx.lineWidth = 1;
+            ctx.beginPath();
             for(let i=-3; i<=7; i++) {
-                ctx.beginPath();
                 ctx.moveTo(WIDTH/2 + (i * 70), 0);
                 ctx.lineTo(WIDTH/2 + (i * 140), HEIGHT);
-                ctx.stroke();
             }
+            ctx.stroke();
+            
+            ctx.beginPath();
             for(let j=0; j<8; j++) {
                 const yPos = ((time * 150 + j * 100) % HEIGHT);
                 ctx.globalAlpha = 0.15 * (yPos / HEIGHT);
-                ctx.beginPath();
                 ctx.moveTo(0, yPos);
                 ctx.lineTo(WIDTH, yPos);
-                ctx.stroke();
             }
+            ctx.stroke();
             ctx.restore();
 
-            // Orbitals
+            // Orbitals - Optimized with fewer points for better performance
             ctx.save();
             ctx.globalAlpha = 0.08;
             ctx.strokeStyle = '#bc13fe';
             ctx.beginPath();
-            for(let i=0; i<Math.PI*2; i+=0.1) {
+            for(let i=0; i<Math.PI*2; i+=0.15) {
                 const x = WIDTH/2 + Math.sin(3 * i + time) * 120;
                 const y = HEIGHT/2 + Math.cos(2 * i + time * 0.4) * 160;
                 if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -313,7 +327,7 @@
             ctx.stroke();
             ctx.restore();
 
-            // Top Math Shape
+            // Top Math Shape - Optimized with fewer points
             ctx.save();
             ctx.globalAlpha = 0.3;
             ctx.lineWidth = 1.5;
@@ -322,7 +336,7 @@
             ctx.shadowColor = '#ff00ff';
             ctx.beginPath();
             const rX = WIDTH / 2, rY = 115;
-            for(let i=0; i < Math.PI * 2; i += 0.05) {
+            for(let i=0; i < Math.PI * 2; i += 0.08) {
                 const r = 55 * Math.cos(4 * (i + time * 0.5));
                 const x = rX + r * Math.cos(i);
                 const y = rY + r * Math.sin(i);
@@ -389,40 +403,58 @@
                 ctx.closePath(); ctx.stroke(); ctx.restore();
             }
 
-            // Ball Trail
+            // Ball Trail - Optimized with reduced trail length
             if (ball) {
                 ballHistory.push({ x: ball.position.x, y: ball.position.y });
-                if (ballHistory.length > 15) ballHistory.shift();
-                ctx.save(); ctx.lineWidth = 6; ctx.lineCap = 'round';
-                ctx.shadowBlur = 12; ctx.shadowColor = '#00ffff';
+                if (ballHistory.length > 12) ballHistory.shift(); // Reduced from 15 to 12
+                ctx.save(); 
+                ctx.lineWidth = 6; 
+                ctx.lineCap = 'round';
+                ctx.shadowBlur = 12; 
+                ctx.shadowColor = '#00ffff';
                 for (let i = 0; i < ballHistory.length - 1; i++) {
                     const a = (i / ballHistory.length) * 0.5;
                     ctx.strokeStyle = `rgba(0, 255, 255, ${a})`;
-                    ctx.beginPath(); ctx.moveTo(ballHistory[i].x, ballHistory[i].y);
-                    ctx.lineTo(ballHistory[i+1].x, ballHistory[i+1].y); ctx.stroke();
+                    ctx.beginPath(); 
+                    ctx.moveTo(ballHistory[i].x, ballHistory[i].y);
+                    ctx.lineTo(ballHistory[i+1].x, ballHistory[i+1].y); 
+                    ctx.stroke();
                 }
                 ctx.restore();
             }
 
-            // Particles
+            // Particles - Optimized with reverse iteration to avoid splice issues
             ctx.save();
-            particles.forEach((p, index) => {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
                 p.x += p.vx; p.y += p.vy; p.life -= 0.02;
-                if (p.life <= 0) particles.splice(index, 1);
-                else {
-                    ctx.fillStyle = p.color; ctx.globalAlpha = p.life; ctx.shadowBlur = 10; ctx.shadowColor = p.color;
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.fillStyle = p.color; 
+                    ctx.globalAlpha = p.life; 
+                    ctx.shadowBlur = 10; 
+                    ctx.shadowColor = p.color;
                     ctx.beginPath();
                     if (p.star) {
-                        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation || 0);
+                        ctx.save(); 
+                        ctx.translate(p.x, p.y); 
+                        ctx.rotate(p.rotation || 0);
                         ctx.beginPath();
-                        for (let i = 0; i < 5; i++) {
-                            ctx.lineTo(Math.cos((i * 2 * Math.PI) / 5) * (p.size * 2), Math.sin((i * 2 * Math.PI) / 5) * (p.size * 2));
-                            ctx.lineTo(Math.cos(((i + 0.5) * 2 * Math.PI) / 5) * p.size, Math.sin(((i + 0.5) * 2 * Math.PI) / 5) * p.size);
+                        for (let j = 0; j < 5; j++) {
+                            ctx.lineTo(Math.cos((j * 2 * Math.PI) / 5) * (p.size * 2), Math.sin((j * 2 * Math.PI) / 5) * (p.size * 2));
+                            ctx.lineTo(Math.cos(((j + 0.5) * 2 * Math.PI) / 5) * p.size, Math.sin(((j + 0.5) * 2 * Math.PI) / 5) * p.size);
                         }
-                        ctx.closePath(); ctx.fill(); ctx.restore(); p.rotation += 0.12;
-                    } else { ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+                        ctx.closePath(); 
+                        ctx.fill(); 
+                        ctx.restore(); 
+                        p.rotation += 0.12;
+                    } else { 
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); 
+                        ctx.fill(); 
+                    }
                 }
-            });
+            }
             ctx.restore();
 
             // Bumpers
@@ -510,7 +542,15 @@
             });
         });
 
-        runner = Runner.create(); Runner.run(runner, engine); Render.run(render);
+        runner = Runner.create({
+            // Limit frame rate to 60fps for consistent performance
+            // Lower delta helps prevent physics instability on slower devices
+            delta: 1000 / 60,
+            // Enable timing correction for smoother gameplay
+            isFixed: false
+        }); 
+        Runner.run(runner, engine); 
+        Render.run(render);
     }
 
     function generateCracks(x, y) {
@@ -528,13 +568,15 @@
     }
 
     function spawnParticles(x, y, color) {
-        for (let i = 0; i < 15; i++) {
+        // Reduced particle count for better performance
+        for (let i = 0; i < 12; i++) {
             particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10, size: Math.random() * 4 + 1, life: 1.0, color: color || '#fff' });
         }
     }
 
     function spawnWizardParticles(x, y) {
-        for (let i = 0; i < 45; i++) {
+        // Reduced particle count for better performance
+        for (let i = 0; i < 35; i++) {
             particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 22, vy: (Math.random() - 0.5) * 22, size: Math.random() * 6 + 4, life: 1.6, color: '#ffff00', star: true, rotation: Math.random() * Math.PI });
         }
     }
@@ -543,7 +585,8 @@
         mirrorBroken = true; mirrorSegments.forEach(seg => World.remove(engine.world, seg));
         mirrorSegments = []; mirrorCracks = []; score += 30000;
         document.getElementById('score').innerText = score.toString().padStart(6, '0');
-        for (let i = 0; i < 80; i++) {
+        // Reduced particle count for better performance
+        for (let i = 0; i < 60; i++) {
             const angle = Math.PI + Math.random() * Math.PI;
             particles.push({ x: DOME_X + Math.cos(angle) * (Math.random() * MIRROR_RADIUS), y: DOME_Y + Math.sin(angle) * (Math.random() * MIRROR_RADIUS), vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 15 + 2, size: Math.random() * 10 + 4, life: 2.8, color: 'rgba(0, 255, 255, 0.8)', shard: true, rotation: Math.random() * Math.PI });
         }
