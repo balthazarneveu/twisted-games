@@ -209,6 +209,7 @@
         let useParentTimer = false;
         let gameActive = true;
         let score = 0;
+        let loopRunning = false;
 
         const LEVELS = [
             { type: 'classic', dur: 12000, name: 'Classic Resonance' },
@@ -228,10 +229,8 @@
         }
 
         function initLevel() {
-            // Don't auto-restart if in iframe and game is not active
-            if (window.parent !== window && !gameActive) {
-                return;
-            }
+            // Always ensure game is active when initializing
+            gameActive = true;
             
             const config = LEVELS[Math.floor(Math.random() * LEVELS.length)];
             currentLevel = config.type;
@@ -240,6 +239,9 @@
 
             groups.p.classList.remove('control-hidden');
             groups.f2.classList.add('control-hidden');
+            // Ensure sliders are always interactive
+            groups.p.style.pointerEvents = 'auto';
+            groups.f2.style.pointerEvents = 'auto';
             labels.labelF1.innerText = "Frequency";
             labels.labelP.innerText = "Phase";
             sliders.f1.min = "1.0"; sliders.f1.max = "8.0"; sliders.f1.step = "0.01";
@@ -255,6 +257,9 @@
                 target.f2 = 0.4 + Math.random() * 0.5; 
                 groups.p.classList.add('control-hidden');
                 groups.f2.classList.remove('control-hidden');
+                // Ensure sliders are always interactive
+                groups.p.style.pointerEvents = 'auto';
+                groups.f2.style.pointerEvents = 'auto';
                 labels.labelF1.innerText = "Carrier Multiplier";
                 labels.labelF2.innerText = "Symmetry Depth";
                 sliders.f1.min = "1.0"; sliders.f1.max = "10.0"; sliders.f1.step = "1.0";
@@ -345,6 +350,11 @@
         }
 
         function loop() {
+            // Always ensure loop continues if game is active
+            if (!gameActive) {
+                return;
+            }
+            
             const rect = container.getBoundingClientRect();
             if (canvas.width !== Math.floor(rect.width * (window.devicePixelRatio || 1))) forceResize();
 
@@ -379,6 +389,7 @@
                     if (progress <= 0) initLevel();
                 }
 
+                // Always read slider values, even when won (for visual feedback)
                 player.f1 = parseFloat(sliders.f1.value);
                 player.p = parseFloat(sliders.p.value);
                 player.f2 = parseFloat(sliders.f2.value);
@@ -427,7 +438,10 @@
             
             // Continue loop only if game is active
             if (gameActive) {
+                loopRunning = true;
                 requestAnimationFrame(loop);
+            } else {
+                loopRunning = false;
             }
         }
 
@@ -445,6 +459,16 @@
                         endGame();
                     }
                 } else if (event.data && event.data.type === 'timeUpdate') {
+                    // Ensure game is active when receiving time updates
+                    if (!gameActive) {
+                        console.log('Resonance: Reactivating game on time update');
+                        gameActive = true;
+                        isWon = false;
+                        // Restart loop if it's not running
+                        if (!loopRunning) {
+                            loop();
+                        }
+                    }
                     timeLeft = event.data.timeLeft;
                     totalTime = event.data.totalTime;
                     console.log('Resonance: Time update', timeLeft, '/', totalTime);
@@ -457,8 +481,18 @@
         
         function startGame() {
             console.log('Resonance: Starting game');
+            // Reset all state to ensure fresh start
             gameActive = true;
+            isWon = false;
+            winTime = 0;
             score = 0;
+            timeLeft = 0;
+            totalTime = 0;
+            loopRunning = false;
+            // Ensure sliders are always interactive
+            sliders.f1.disabled = false;
+            sliders.p.disabled = false;
+            sliders.f2.disabled = false;
             initLevel(); 
             loop();
         }

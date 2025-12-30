@@ -370,55 +370,43 @@
         pizza: 12,
         zen: 15,
         santa: 20,
-        scratchcard_zen: 20,
+        scratchcard_zen: 5,
         scratchcard_danger: 10,
         scratchcard_minefield: 10,
         scratchcard_final: 10,
-        sort: 60,
-        sort1: 20,
-        sort2: 20,
-        sort3: 20,
-        sort4: 20,
-        sort5: 20,
-        sort6: 20,
-        ride_routine: 15,
-        ride_routine1: 15,
-        ride_routine2: 15,
-        ride_routine3: 15,
-        ride_routine4: 15,
-        ride_routine5: 15,
-        morning_rush: 15,
-        morning_rush1: 15,
-        morning_rush2: 15,
-        morning_rush3: 15,
-        morning_rush4: 15,
-        morning_rush5: 15
+        sort1: 5,
+        sort2: 5,
+        sort3: 5,
+        sort4: 5,
+        sort5: 5,
+        sort6: 5
     };
 
     // Game session configuration - define the sequence of games to play
     // You can add the same game multiple times by using different instance IDs
     const GAME_SESSION = [
         // { gameId: 'sort', label: 'Speedrun Chronologique' },
-        { gameId: 'sort6', label: 'Speedrun: La Journée' },
+        { gameId: 'resonance', label: 'Resonance 2' },
+        // { gameId: 'sort6', label: 'Speedrun: La Journée' },
         { gameId: 'scratchcard_zen', label: 'Zen Garden' },
         { gameId: 'santa', label: 'Jumping Santa' },
-        { gameId: 'sort2', label: 'Speedrun: Reine des Neiges' },
+        // { gameId: 'sort2', label: 'Speedrun: Reine des Neiges' },
         { gameId: 'scratchcard_danger', label: 'Danger Zone' },
-        { gameId: 'sort1', label: 'Speedrun: Harry Potter' },
+        // { gameId: 'sort1', label: 'Speedrun: Harry Potter' },
         { gameId: 'scratchcard_minefield', label: 'Minefield' },
-        { gameId: 'sort5', label: 'Speedrun: Inventions' },
+        // { gameId: 'sort5', label: 'Speedrun: Inventions' },
         { gameId: 'pizza', label: 'Pizza Stack Panic' },
         { gameId: 'recycle1', label: 'Eco-Tri: Compost' },
         { gameId: 'zen', label: 'Sérénité Absolue' },
         { gameId: 'resonance', label: 'Resonance 1' },
-        { gameId: 'sort4', label: 'Speedrun: Histoire de France' },
+        // { gameId: 'sort4', label: 'Speedrun: Histoire de France' },
         { gameId: 'recycle3', label: 'Eco-Tri: Encombrants' },
         { gameId: 'snow', label: 'Snow Ninja' },
         { gameId: 'scratchcard_final', label: 'Final Hell' },
-        { gameId: 'sort3', label: 'Speedrun: Les Saisons' },
+        // { gameId: 'sort3', label: 'Speedrun: Les Saisons' },
         { gameId: 'recycle2', label: 'Eco-Tri: Recyclage' },
         { gameId: 'pinball', label: 'Pinball Wizard' },
-        { gameId: 'resonance', label: 'Resonance 2' },
+
 
     ];
 
@@ -443,19 +431,7 @@
         sort3: { file: 'sort.html?level=2', timeout: GAME_TIMEOUTS.sort3 },
         sort4: { file: 'sort.html?level=3', timeout: GAME_TIMEOUTS.sort4 },
         sort5: { file: 'sort.html?level=4', timeout: GAME_TIMEOUTS.sort5 },
-        sort6: { file: 'sort.html?level=5', timeout: GAME_TIMEOUTS.sort6 },
-        ride_routine: { file: 'ride_routine.html', timeout: GAME_TIMEOUTS.ride_routine },
-        ride_routine1: { file: 'ride_routine.html?session=1', timeout: GAME_TIMEOUTS.ride_routine1 },
-        ride_routine2: { file: 'ride_routine.html?session=2', timeout: GAME_TIMEOUTS.ride_routine2 },
-        ride_routine3: { file: 'ride_routine.html?session=3', timeout: GAME_TIMEOUTS.ride_routine3 },
-        ride_routine4: { file: 'ride_routine.html?session=4', timeout: GAME_TIMEOUTS.ride_routine4 },
-        ride_routine5: { file: 'ride_routine.html?session=5', timeout: GAME_TIMEOUTS.ride_routine5 },
-        morning_rush: { file: 'morning_rush.html', timeout: GAME_TIMEOUTS.morning_rush },
-        morning_rush1: { file: 'morning_rush.html?session=1', timeout: GAME_TIMEOUTS.morning_rush1 },
-        morning_rush2: { file: 'morning_rush.html?session=2', timeout: GAME_TIMEOUTS.morning_rush2 },
-        morning_rush3: { file: 'morning_rush.html?session=3', timeout: GAME_TIMEOUTS.morning_rush3 },
-        morning_rush4: { file: 'morning_rush.html?session=4', timeout: GAME_TIMEOUTS.morning_rush4 },
-        morning_rush5: { file: 'morning_rush.html?session=5', timeout: GAME_TIMEOUTS.morning_rush5 }
+        sort6: { file: 'sort.html?level=5', timeout: GAME_TIMEOUTS.sort6 }
     };
 
     // Build games array from session configuration
@@ -485,6 +461,7 @@
     let gameTransitioning = false;
     let gameScores = {};
     let gameTimeoutId = null;
+    let gamesStarted = false;
 
     // Listen for game completion messages from iframes
     window.addEventListener('message', (event) => {
@@ -818,7 +795,9 @@
     }
 
     function handleFullscreenChange() {
-        if (isFullscreen()) {
+        // Only start games once - don't restart if fullscreen changes during gameplay
+        if (isFullscreen() && !gamesStarted) {
+            gamesStarted = true;
             // Hide start screen and start first game
             const startScreen = document.getElementById('start-screen');
             startScreen.classList.add('hidden');
@@ -905,6 +884,11 @@
         
         // Handle button interaction - support both click and touch for iOS
         const handleStart = (e) => {
+            // Don't restart if games have already started
+            if (gamesStarted) {
+                return;
+            }
+            
             if (e) {
                 e.preventDefault();
                 e.stopPropagation();
