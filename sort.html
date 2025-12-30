@@ -15,6 +15,40 @@
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
 
+        /* Timer bar for parent communication */
+        #timer-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            width: 100%;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        #timer-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff 0%, #00ffff 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        /* Fullscreen CSS for iframe mode */
+        body.in-iframe {
+            margin: 0;
+            padding: 0;
+        }
+
+        body.in-iframe .h-screen {
+            height: 100vh;
+        }
+
+        /* Hide circular timer in iframe mode - we use timer bar instead */
+        body.in-iframe #timer-container {
+            display: none;
+        }
+
         /* Halo autour de l'écran */
         #screen-alert {
             position: fixed;
@@ -161,6 +195,11 @@
 </head>
 <body class="h-screen w-full flex flex-col items-center justify-start pt-4 px-6">
 
+    <!-- Timer bar for parent communication -->
+    <div id="timer-bar">
+        <div id="timer-bar-fill"></div>
+    </div>
+
     <!-- Effet de halo sur tout l'écran -->
     <div id="screen-alert"></div>
 
@@ -301,6 +340,19 @@
         let levelTimeLeft = MAX_TIME;
         let gameActive = false;
         let mainTimerInterval;
+        let pendingTimeouts = []; // Track pending timeouts to cancel them
+        
+        // Variables for parent communication
+        let useParentTimer = false;
+        let timeLeft = 0;
+        let totalTime = 0;
+        let gameCompleted = false;
+        
+        // Parse URL parameter for specific level (0-5)
+        const urlParams = new URLSearchParams(window.location.search);
+        const levelParam = urlParams.get('level');
+        const targetLevelIndex = levelParam !== null ? parseInt(levelParam, 10) : null;
+        const isSingleLevelMode = targetLevelIndex !== null && targetLevelIndex >= 0 && targetLevelIndex < LEVELS.length;
 
         const listWrapper = document.getElementById('items-list');
         const modal = document.getElementById('modal');
@@ -311,6 +363,77 @@
         const screenAlert = document.getElementById('screen-alert');
         const validateBtn = document.getElementById('validate-btn');
         const loaderBar = document.getElementById('transition-loader');
+
+        function updateTimerBar() {
+            const timerFill = document.getElementById('timer-bar-fill');
+            if (!timerFill) return;
+            
+            const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+            timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+            
+            // Change color when time is running low
+            if (percentage < 20) {
+                timerFill.style.background = '#ff0000';
+            } else if (percentage < 50) {
+                timerFill.style.background = '#ff9800';
+            } else {
+                timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+            }
+            
+            // Also update circular timer display if visible (for standalone mode)
+            if (!useParentTimer && levelTimerDisplay) {
+                const secondsLeft = Math.ceil(timeLeft);
+                levelTimerDisplay.innerText = secondsLeft;
+                const offset = 175.9 - (timeLeft / totalTime) * 175.9;
+                if (timerCircle) {
+                    timerCircle.style.strokeDashoffset = offset;
+                    if (timeLeft <= 5) {
+                        timerCircle.style.stroke = "#f97316";
+                        timerContainer.classList.add('halo-orange');
+                        screenAlert.classList.add('screen-alert-active');
+                        validateBtn.classList.add('btn-panic');
+                    } else {
+                        timerCircle.style.stroke = "#6366f1";
+                        timerContainer.classList.remove('halo-orange');
+                        screenAlert.classList.remove('screen-alert-active');
+                        validateBtn.classList.remove('btn-panic');
+                    }
+                }
+            }
+        }
+
+        function endGame() {
+            // Allow endGame to be called even if gameActive is false (e.g., from timeout)
+            // Only prevent if already completed
+            if (gameCompleted) return;
+            gameCompleted = true;
+            gameActive = false;
+            
+            // Cancel all pending timeouts
+            pendingTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+            pendingTimeouts = [];
+            
+            // Stop internal timer
+            if (mainTimerInterval) {
+                clearInterval(mainTimerInterval);
+                mainTimerInterval = null;
+            }
+            
+            // Notify parent if in iframe - do this synchronously to ensure it's sent
+            if (window.parent !== window) {
+                // Determine game ID based on level
+                const gameId = isSingleLevelMode ? `sort${targetLevelIndex + 1}` : 'sort';
+                try {
+                    window.parent.postMessage({ 
+                        type: 'gameComplete', 
+                        game: gameId,
+                        score: score 
+                    }, '*');
+                } catch (e) {
+                    console.error('Failed to send gameComplete message:', e);
+                }
+            }
+        }
 
         function updateScore(val) {
             score = Math.max(0, score + val);
@@ -332,39 +455,46 @@
             if (mainTimerInterval) clearInterval(mainTimerInterval);
             gameActive = true;
             
-            mainTimerInterval = setInterval(() => {
-                if (!gameActive) return;
-                
-                updateScore(-1);
-                levelTimeLeft--;
-                levelTimerDisplay.innerText = levelTimeLeft;
-                
-                const offset = 175.9 - (levelTimeLeft / MAX_TIME) * 175.9;
-                timerCircle.style.strokeDashoffset = offset;
+            // Only use internal timer if not in iframe mode
+            if (!useParentTimer) {
+                mainTimerInterval = setInterval(() => {
+                    if (!gameActive) return;
+                    
+                    updateScore(-1);
+                    levelTimeLeft--;
+                    levelTimerDisplay.innerText = levelTimeLeft;
+                    
+                    const offset = 175.9 - (levelTimeLeft / MAX_TIME) * 175.9;
+                    timerCircle.style.strokeDashoffset = offset;
 
-                // Alerte si <= 5 secondes
-                if (levelTimeLeft <= 5) {
-                    timerContainer.classList.add('halo-orange');
-                    screenAlert.classList.add('screen-alert-active');
-                    validateBtn.classList.add('btn-panic');
-                    timerCircle.style.stroke = "#f97316";
-                } else {
-                    timerContainer.classList.remove('halo-orange');
-                    screenAlert.classList.remove('screen-alert-active');
-                    validateBtn.classList.remove('btn-panic');
-                    timerCircle.style.stroke = "#6366f1";
-                }
+                    // Alerte si <= 5 secondes
+                    if (levelTimeLeft <= 5) {
+                        timerContainer.classList.add('halo-orange');
+                        screenAlert.classList.add('screen-alert-active');
+                        validateBtn.classList.add('btn-panic');
+                        timerCircle.style.stroke = "#f97316";
+                    } else {
+                        timerContainer.classList.remove('halo-orange');
+                        screenAlert.classList.remove('screen-alert-active');
+                        validateBtn.classList.remove('btn-panic');
+                        timerCircle.style.stroke = "#6366f1";
+                    }
 
-                if (levelTimeLeft <= 0) {
-                    handleTimeOut();
-                }
-            }, 1000);
+                    if (levelTimeLeft <= 0) {
+                        handleTimeOut();
+                    }
+                }, 1000);
+            } else {
+                // In iframe mode, update timer bar from parent timer
+                updateTimerBar();
+            }
         }
 
         function handleTimeOut() {
             gameActive = false;
             updateScore(-50); 
-            checkWin(true); 
+            checkWin(true);
+            // Don't call endGame() here - let checkWin/showVictory handle it based on mode
         }
 
         function initLevel(index) {
@@ -378,7 +508,12 @@
             validateBtn.classList.remove('btn-panic');
             validateBtn.innerText = "Valider l'ordre";
             
-            document.getElementById('level-badge').innerText = `Niveau ${index + 1} / ${LEVELS.length}`;
+            // Update level badge - show single level if in single level mode
+            if (isSingleLevelMode) {
+                document.getElementById('level-badge').innerText = `Niveau ${index + 1}`;
+            } else {
+                document.getElementById('level-badge').innerText = `Niveau ${index + 1} / ${LEVELS.length}`;
+            }
             document.getElementById('level-title').innerText = level.title;
             modal.classList.add('hidden');
             loaderBar.style.width = '0%';
@@ -391,6 +526,60 @@
             items = shuffled.map((d, i) => ({ ...d, currentPos: i }));
             render();
             startTimers();
+        }
+        
+        function init() {
+            // Reset score on start
+            score = 200;
+            scoreDisplay.innerText = score;
+            gameCompleted = false;
+            
+            // Detect iframe mode and listen for parent messages
+            if (window.parent !== window) {
+                document.body.classList.add('in-iframe');
+                useParentTimer = true;
+                gameActive = true;
+                
+                // Initialize timer bar to 100%
+                const timerFill = document.getElementById('timer-bar-fill');
+                if (timerFill) {
+                    timerFill.style.width = '100%';
+                }
+                
+                // Listen for messages from parent
+                window.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'gameTimeout') {
+                        // Parent timeout received - this means the entire game session timed out
+                        // End game immediately regardless of level - bypass all other logic
+                        if (!gameCompleted) {
+                            timeLeft = 0;
+                            // Cancel all pending operations
+                            pendingTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+                            pendingTimeouts = [];
+                            // Stop internal timer if running
+                            if (mainTimerInterval) {
+                                clearInterval(mainTimerInterval);
+                                mainTimerInterval = null;
+                            }
+                            // Force end game immediately - don't go through checkWin/showVictory
+                            // This ensures we always send the completion message on timeout
+                            endGame();
+                        }
+                    } else if (event.data && event.data.type === 'timeUpdate') {
+                        // Timer update received - update timer bar
+                        timeLeft = event.data.timeLeft;
+                        totalTime = event.data.totalTime;
+                        updateTimerBar();
+                        
+                        // Note: Don't call handleTimeOut() here - let parent send gameTimeout message
+                        // This allows the game to continue to next level if needed
+                    }
+                });
+            }
+            
+            // Start at specified level or first level
+            const startLevel = isSingleLevelMode ? targetLevelIndex : 0;
+            initLevel(startLevel);
         }
 
         function render() {
@@ -467,16 +656,35 @@
                 validateBtn.classList.remove('btn-panic');
                 if (!forceNext) updateScore(200); 
                 listWrapper.querySelectorAll('.label-text').forEach(t => t.style.opacity = '1');
-                setTimeout(() => showVictory(forceNext), 600);
+                
+                // In iframe mode with single level, end immediately without showing modal
+                const isSingleLevelComplete = isSingleLevelMode && currentLevelIndex === targetLevelIndex;
+                if (useParentTimer && isSingleLevelComplete) {
+                    endGame();
+                    return;
+                }
+                
+                // In iframe mode, call showVictory immediately (no delay)
+                if (useParentTimer) {
+                    showVictory(forceNext);
+                } else {
+                    const timeoutId = setTimeout(() => {
+                        if (!gameCompleted) showVictory(forceNext);
+                    }, 600);
+                    pendingTimeouts.push(timeoutId);
+                }
             } else {
                 updateScore(-50);
                 validateBtn.classList.add('bg-red-600', 'shake');
                 validateBtn.innerText = "ERREUR -50 pts";
-                setTimeout(() => {
-                    validateBtn.classList.remove('bg-red-600', 'shake');
-                    if (levelTimeLeft > 5) validateBtn.classList.add('bg-slate-900');
-                    validateBtn.innerText = "Valider l'ordre";
+                const timeoutId = setTimeout(() => {
+                    if (!gameCompleted) {
+                        validateBtn.classList.remove('bg-red-600', 'shake');
+                        if (levelTimeLeft > 5) validateBtn.classList.add('bg-slate-900');
+                        validateBtn.innerText = "Valider l'ordre";
+                    }
                 }, 1000);
+                pendingTimeouts.push(timeoutId);
             }
         }
 
@@ -484,25 +692,57 @@
             if (!wasTimeout) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
             
             const isLast = currentLevelIndex === LEVELS.length - 1;
+            const isSingleLevelComplete = isSingleLevelMode && currentLevelIndex === targetLevelIndex;
             document.getElementById('modal-score').innerText = score;
+            
+            // If in iframe mode, end game immediately without showing modal
+            if (useParentTimer) {
+                if (isSingleLevelComplete || isLast) {
+                    // End game immediately for single level or last level
+                    endGame();
+                    return;
+                } else {
+                    // Continue to next level without showing modal
+                    const timeoutId = setTimeout(() => { 
+                        if (!gameCompleted) initLevel(currentLevelIndex + 1); 
+                    }, 100);
+                    pendingTimeouts.push(timeoutId);
+                    return;
+                }
+            }
+            
+            // Standalone mode - show modal
+            if (isSingleLevelComplete) {
+                document.getElementById('modal-emoji').innerText = wasTimeout ? "⏰" : "🏁";
+                document.getElementById('modal-title').innerText = wasTimeout ? "TEMPS ÉCOULÉ" : "NIVEAU RÉUSSI";
+                document.getElementById('next-theme-container').classList.add('hidden');
+                document.getElementById('final-btn-container').classList.add('hidden');
+                modal.classList.remove('hidden');
+                return;
+            }
             
             if (isLast) {
                 document.getElementById('modal-emoji').innerText = score > 400 ? "👑" : "🥉";
                 document.getElementById('modal-title').innerText = "SCORE FINAL";
                 document.getElementById('next-theme-container').classList.add('hidden');
                 document.getElementById('final-btn-container').classList.remove('hidden');
+                modal.classList.remove('hidden');
             } else {
                 document.getElementById('modal-emoji').innerText = wasTimeout ? "⏰" : "🏁";
                 document.getElementById('modal-title').innerText = wasTimeout ? "TEMPS ÉCOULÉ" : "NIVEAU RÉUSSI";
                 document.getElementById('next-theme-title').innerText = LEVELS[currentLevelIndex + 1].title;
-                
                 setTimeout(() => { loaderBar.style.width = '100%'; }, 10);
                 setTimeout(() => { initLevel(currentLevelIndex + 1); }, 3000);
+                modal.classList.remove('hidden');
             }
-            modal.classList.remove('hidden');
         }
 
-        initLevel(0);
+        // Initialize on load
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            init();
+        } else {
+            window.addEventListener('load', init);
+        }
     </script>
 </body>
 </html>
