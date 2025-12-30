@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Santa Runner - Mission Corrigée</title>
+    <style>
+        :root {
+            --sky-color: #0c1445;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--sky-color);
+            font-family: 'Arial Rounded MT Bold', 'Helvetica', sans-serif;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #050b29, #1e2761);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            color: white;
+            z-index: 10;
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 10px 18px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #timer-container {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            text-align: center;
+            color: white;
+            z-index: 10;
+        }
+
+        .progress-bg {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        #time-fill {
+            width: 100%;
+            height: 100%;
+            background: #4ade80;
+            transition: width 0.1s linear;
+        }
+
+        #overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            z-index: 30;
+        }
+
+        .btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 18px 50px;
+            font-size: 1.5rem;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 5px 0 #991b1b;
+            font-weight: bold;
+        }
+
+        #slowmo-vignette {
+            position: absolute;
+            inset: 0;
+            box-shadow: inset 0 0 150px rgba(251, 191, 36, 0.4);
+            pointer-events: none;
+            display: none;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="slowmo-vignette"></div>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        <div class="stat-box">
+            <div id="lives-display" style="font-size: 1.4rem; letter-spacing: 3px;">❤️❤️❤️</div>
+            <div id="score-display">Score : 0</div>
+        </div>
+        <div class="stat-box">
+            <div id="dist-display">0 m</div>
+        </div>
+    </div>
+
+    <div id="timer-container">
+        <div id="mission-text">MISSION : 30s</div>
+        <div class="progress-bg">
+            <div id="time-fill"></div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <h1 id="main-title">MISSION NOËL 🎅</h1>
+        <p id="stats-summary"></p>
+        <button id="play-btn" class="btn">JOUER</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const playBtn = document.getElementById('play-btn');
+    const slowmoVignette = document.getElementById('slowmo-vignette');
+    const timeFill = document.getElementById('time-fill');
+
+    let state = 'MENU';
+    let score = 0;
+    let distance = 0;
+    let lives = 3;
+    let baseSpeed = 4.2; 
+    let slowMoTimer = 0;
+    const slowMoMax = 180;
+    let invuln = 0;
+    let gameTimeRemaining = 30;
+
+    // SANTA : Physique ajustée pour des sauts plus hauts
+    const SANTA = { 
+        x: 80, y: 0, w: 75, h: 75, 
+        vy: 0, 
+        grav: 0.75,    // Gravité plus douce pour laisser planer
+        jump: -21,     // Impulsion plus forte pour aller plus haut
+        grounded: false, 
+        rotation: 0 
+    };
+
+    let obstacles = [];
+    let items = [];
+    let bg = [];
+    let snowflakes = [];
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function init() {
+        score = 0; distance = 0; lives = 3; slowMoTimer = 0; invuln = 0; baseSpeed = 4.2;
+        gameTimeRemaining = 30;
+        obstacles = []; items = []; bg = []; snowflakes = [];
+        SANTA.y = canvas.height - 180;
+        SANTA.vy = 0;
+        SANTA.rotation = 0;
+        
+        for(let i=0; i<6; i++) bg.push({ x: i * (canvas.width/3), t: i % 2 === 0 ? '🏠' : '🎄' });
+        for(let i=0; i<50; i++) {
+            snowflakes.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 1,
+                speed: Math.random() * 1.5 + 0.5
+            });
+        }
+        updateUI();
+    }
+
+    function updateUI() {
+        document.getElementById('lives-display').innerText = '❤️'.repeat(lives);
+        document.getElementById('score-display').innerText = `Score : ${score}`;
+        document.getElementById('dist-display').innerText = `${Math.floor(distance)} m`;
+        timeFill.style.width = (gameTimeRemaining / 30) * 100 + '%';
+        document.getElementById('mission-text').innerText = `TEMPS : ${Math.ceil(gameTimeRemaining)}s`;
+    }
+
+    function jump() {
+        if (state === 'PLAYING' && SANTA.grounded) {
+            SANTA.vy = SANTA.jump;
+            SANTA.grounded = false;
+        }
+    }
+
+    window.addEventListener('touchstart', (e) => {
+        if(e.target.tagName !== 'BUTTON') { jump(); e.preventDefault(); }
+    }, { passive: false });
+
+    playBtn.addEventListener('click', () => {
+        overlay.style.display = 'none';
+        state = 'PLAYING';
+        init();
+    });
+
+    function update() {
+        if (state !== 'PLAYING') return;
+
+        let isSlow = slowMoTimer > 0;
+        let timeScale = isSlow ? 0.38 : 1.0;
+        
+        gameTimeRemaining -= (1/60);
+        if (gameTimeRemaining <= 0) finishGame("MISSION ACCOMPLIE ! 🎁");
+
+        if (isSlow) {
+            slowMoTimer--;
+            slowmoVignette.style.display = 'block';
+        } else {
+            slowmoVignette.style.display = 'none';
+        }
+
+        let moveSpeed = baseSpeed * timeScale;
+        distance += moveSpeed / 10;
+        if (invuln > 0) invuln--;
+
+        // Physique Santa : Appliquée par le timeScale pour l'effet Matrix
+        SANTA.vy += SANTA.grav * timeScale;
+        SANTA.y += SANTA.vy * timeScale;
+
+        // Rotation
+        if (!SANTA.grounded) {
+            SANTA.rotation += 0.15 * timeScale;
+        } else {
+            SANTA.rotation = 0;
+        }
+
+        const ground = canvas.height - 100;
+        if (SANTA.y + SANTA.h > ground) {
+            SANTA.y = ground - SANTA.h;
+            SANTA.vy = 0;
+            SANTA.grounded = true;
+        }
+
+        // Neige
+        snowflakes.forEach(s => {
+            s.y += s.speed * timeScale;
+            if (s.y > canvas.height) s.y = -10;
+        });
+
+        // Décors
+        bg.forEach(b => {
+            b.x -= moveSpeed * 0.3;
+            if (b.x + 180 < 0) b.x = canvas.width + 50;
+        });
+
+        // Obstacles (Bonshommes de neige ⛄)
+        if (Math.random() < 0.01) { 
+            if (obstacles.length === 0 || obstacles[obstacles.length-1].x < canvas.width - 500) {
+                obstacles.push({ x: canvas.width, y: ground - 70, w: 70, h: 70, t: '⛄' });
+            }
+        }
+
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            let o = obstacles[i];
+            o.x -= moveSpeed;
+            if (invuln === 0 &&
+                SANTA.x < o.x + o.w - 20 && SANTA.x + SANTA.w - 20 > o.x &&
+                SANTA.y < o.y + o.h - 15 && SANTA.y + SANTA.h - 15 > o.y) {
+                lives--;
+                invuln = 60;
+                obstacles.splice(i, 1);
+                if (lives <= 0) finishGame("CONGELÉ ! ❄️");
+            }
+            if (o.x + o.w < 0) obstacles.splice(i, 1);
+        }
+
+        // CHAMPAGNE 🍾 : Hauteur abaissée (ground - 220 au lieu de ground - 300+)
+        if (Math.random() < 0.003) {
+            items.push({ x: canvas.width, y: ground - 180 - Math.random() * 80, w: 50, h: 50, t: '🍾' });
+        }
+
+        for (let i = items.length - 1; i >= 0; i--) {
+            let it = items[i];
+            it.x -= moveSpeed;
+            if (SANTA.x < it.x + it.w && SANTA.x + SANTA.w > it.x &&
+                SANTA.y < it.y + it.h && SANTA.y + SANTA.h > it.y) {
+                items.splice(i, 1);
+                score += 100;
+                slowMoTimer = slowMoMax;
+                if(lives < 3) lives++;
+            } else if (it.x + it.w < 0) items.splice(i, 1);
+        }
+
+        updateUI();
+    }
+
+    function finishGame(title) {
+        state = 'GAMEOVER';
+        overlay.style.display = 'flex';
+        document.getElementById('main-title').innerText = title;
+        document.getElementById('stats-summary').innerText = `Points : ${score}`;
+        document.getElementById('play-btn').innerText = "RECOMMENCER";
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const ground = canvas.height - 100;
+
+        // Neige
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        snowflakes.forEach(s => {
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Décors
+        ctx.font = "85px Arial";
+        bg.forEach(b => ctx.fillText(b.t, b.x, ground));
+
+        // Sol
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, ground, canvas.width, 100);
+
+        // Objets
+        ctx.font = "65px Arial";
+        obstacles.forEach(o => ctx.fillText(o.t, o.x, o.y + o.w));
+        ctx.font = "50px Arial";
+        items.forEach(it => ctx.fillText(it.t, it.x, it.y + it.w));
+
+        // Santa
+        ctx.save();
+        
+        // Système de couleur corrigé (Gel progressif bleu)
+        if (lives === 2) {
+            // Un peu de bleu froid
+            ctx.filter = `drop-shadow(0 0 10px rgba(0, 100, 255, 0.5)) saturate(0.8) hue-rotate(-20deg)`;
+        } else if (lives === 1) {
+            // Très bleu / glacial
+            ctx.filter = `drop-shadow(0 0 20px #00ffff) saturate(0.5) hue-rotate(160deg)`;
+        }
+
+        if (invuln % 10 > 5) ctx.globalAlpha = 0.4;
+        
+        ctx.translate(SANTA.x + SANTA.w/2, SANTA.y + SANTA.h/2);
+        ctx.rotate(SANTA.rotation);
+        
+        ctx.font = "80px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText('🎅', 0, 0);
+        
+        ctx.restore();
+
+        requestAnimationFrame(() => { update(); draw(); });
+    }
+
+    draw();
+</script>
+</body>
+</html>
