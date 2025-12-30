@@ -202,6 +202,8 @@
             justify-content: center;
             align-items: center;
             transition: opacity 0.5s ease;
+            touch-action: manipulation;
+            -webkit-touch-callout: none;
         }
 
         #start-screen.hidden {
@@ -234,6 +236,13 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            -webkit-tap-highlight-color: rgba(255, 255, 255, 0.3);
+            touch-action: manipulation;
+            -webkit-touch-callout: none;
+            user-select: none;
+            -webkit-user-select: none;
+            position: relative;
+            z-index: 10;
         }
 
         #fullscreen-button:hover {
@@ -314,6 +323,8 @@
                 padding: 15px 30px;
                 font-size: 1rem;
                 letter-spacing: 3px;
+                min-height: 44px;
+                min-width: 200px;
             }
 
             #start-instruction {
@@ -767,7 +778,30 @@
         }, 100);
     }
 
+    // Detect iOS devices (including Chrome on iOS, which uses WebKit)
+    function isIOS() {
+        const ua = navigator.userAgent || navigator.vendor || window.opera;
+        // Check for iOS devices directly
+        if (/iPad|iPhone|iPod/.test(ua)) {
+            return true;
+        }
+        // Check for Chrome on iOS (CriOS) or other iOS browsers
+        if (/CriOS|FxiOS|EdgiOS/.test(ua)) {
+            return true;
+        }
+        // Check for iPad on iOS 13+ (which reports as MacIntel)
+        if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) {
+            return true;
+        }
+        return false;
+    }
+
     function requestFullscreen() {
+        // iOS Safari doesn't support Fullscreen API properly, so skip it
+        if (isIOS()) {
+            return Promise.resolve();
+        }
+        
         if (document.documentElement.requestFullscreen) {
             return document.documentElement.requestFullscreen();
         } else if (document.documentElement.webkitRequestFullscreen) {
@@ -777,10 +811,14 @@
         } else if (document.documentElement.mozRequestFullScreen) {
             return document.documentElement.mozRequestFullScreen();
         }
-        return Promise.reject('Fullscreen not supported');
+        return Promise.resolve(); // Don't reject, just proceed
     }
 
     function isFullscreen() {
+        // On iOS, consider it "fullscreen" since we skip the API
+        if (isIOS()) {
+            return true;
+        }
         return !!(document.fullscreenElement || 
                  document.webkitFullscreenElement || 
                  document.msFullscreenElement || 
@@ -858,6 +896,11 @@
         
         const fullscreenButton = document.getElementById('fullscreen-button');
         
+        // Update button text for iOS devices
+        if (isIOS()) {
+            fullscreenButton.textContent = 'START GAME';
+        }
+        
         // Listen for fullscreen changes
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -868,19 +911,93 @@
         document.addEventListener('keydown', forwardKeyboardEvent);
         document.addEventListener('keyup', forwardKeyboardEvent);
         
-        // Button click handler
-        fullscreenButton.addEventListener('click', () => {
-            requestFullscreen().catch(err => {
+        // Handle button interaction - support both click and touch for iOS
+        const handleStart = (e) => {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            requestFullscreen().then(() => {
+                handleFullscreenChange();
+            }).catch(err => {
                 console.error('Fullscreen error:', err);
                 // If fullscreen fails, start games anyway
                 handleFullscreenChange();
             });
+        };
+        
+        // Ensure button is interactive
+        fullscreenButton.style.pointerEvents = 'auto';
+        fullscreenButton.setAttribute('role', 'button');
+        fullscreenButton.setAttribute('aria-label', 'Start game');
+        
+        // Click handler (desktop and mobile)
+        fullscreenButton.addEventListener('click', handleStart, { passive: false });
+        
+        // Pointer events as universal fallback (works for both mouse and touch)
+        fullscreenButton.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            fullscreenButton.style.opacity = '0.8';
+        }, { passive: false });
+        
+        fullscreenButton.addEventListener('pointerup', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            fullscreenButton.style.opacity = '1';
+            handleStart(e);
+        }, { passive: false });
+        
+        // Touch handlers for iOS - use both touchstart and touchend for better compatibility
+        let touchStarted = false;
+        fullscreenButton.addEventListener('touchstart', (e) => {
+            touchStarted = true;
+            e.stopPropagation();
+            // Add visual feedback
+            fullscreenButton.style.opacity = '0.8';
+        }, { passive: false });
+        
+        fullscreenButton.addEventListener('touchend', (e) => {
+            if (touchStarted) {
+                e.preventDefault();
+                e.stopPropagation();
+                fullscreenButton.style.opacity = '1';
+                handleStart(e);
+            }
+            touchStarted = false;
+        }, { passive: false });
+        
+        fullscreenButton.addEventListener('touchcancel', () => {
+            touchStarted = false;
+            fullscreenButton.style.opacity = '1';
         });
         
         // Also allow touch/click anywhere on start screen
-        document.getElementById('start-screen').addEventListener('click', (e) => {
-            if (e.target === fullscreenButton) return;
-            requestFullscreen().catch(() => handleFullscreenChange());
+        const startScreen = document.getElementById('start-screen');
+        let screenTouchStarted = false;
+        
+        startScreen.addEventListener('click', (e) => {
+            if (e.target === fullscreenButton || e.target.closest('#fullscreen-button')) return;
+            handleStart(e);
+        });
+        
+        startScreen.addEventListener('touchstart', (e) => {
+            // Don't start if touching the button
+            if (e.target === fullscreenButton || e.target.closest('#fullscreen-button')) return;
+            screenTouchStarted = true;
+        }, { passive: false });
+        
+        startScreen.addEventListener('touchend', (e) => {
+            if (e.target === fullscreenButton || e.target.closest('#fullscreen-button')) return;
+            if (screenTouchStarted) {
+                e.preventDefault();
+                e.stopPropagation();
+                handleStart(e);
+            }
+            screenTouchStarted = false;
+        }, { passive: false });
+        
+        startScreen.addEventListener('touchcancel', () => {
+            screenTouchStarted = false;
         });
     });
 </script>
