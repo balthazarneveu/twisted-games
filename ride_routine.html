@@ -141,10 +141,29 @@
         // Session-specific trick orders
         // Available tricks: levelBarspin, levelTailwhip, levelOllie, levelKickflip, 
         //                  levelPedal, levelPump, levelScrew, levelWax
+        
+        // Helper function to shuffle array (Fisher-Yates)
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+        
+        // Create infinite shuffled array for session 4 (repeat base sequence 30+ times)
+        const baseSequence4 = [levelOllie, levelBarspin, levelTailwhip, levelWax, levelTailwhip, levelScrew, levelPump, levelKickflip, levelPedal];
+        const infiniteSequence4 = [];
+        for (let i = 0; i < 35; i++) {
+            infiniteSequence4.push(...shuffleArray(baseSequence4));
+        }
+        
         const SESSION_TRICKS = {
             '1': [levelPump, levelKickflip, levelPedal],           // Rider Routine 1
             '2': [levelWax, levelTailwhip, levelScrew],            // Rider Routine 2
-            '3': [levelOllie, levelBarspin, levelTailwhip]         // Rider Routine 3
+            '3': [levelOllie, levelBarspin, levelTailwhip],         // Rider Routine 3
+            '4': infiniteSequence4  // Infinite shuffled sequence
         };
         
         // Get the trick order for this session (default to session 1 if invalid)
@@ -164,7 +183,7 @@
             trickTotalTime: TRICK_TIMEOUT_MS
         };
 
-        tricksEl.innerText = `${state.gamesCompleted}/${state.maxGames}`;
+        tricksEl.innerText = sessionNum === '4' ? `${state.gamesCompleted}/∞` : `${state.gamesCompleted}/${state.maxGames}`;
 
         function updateParentTimerBar() {
             const timerFill = document.getElementById('parent-timer-bar-fill');
@@ -224,7 +243,7 @@
                 state.gamesCompleted++;
                 scoreEl.classList.add('score-pop');
                 setTimeout(() => scoreEl.classList.remove('score-pop'), 300);
-                tricksEl.innerText = `${state.gamesCompleted}/${state.maxGames}`;
+                tricksEl.innerText = sessionNum === '4' ? `${state.gamesCompleted}/∞` : `${state.gamesCompleted}/${state.maxGames}`;
                 showFeedback(msg || "BIEN !", "bg-emerald-500");
             } else {
                 // Don't reset score on failure - keep partial points!
@@ -239,8 +258,13 @@
             // Move to next trick index (always continue after failure)
             state.currentTrickIndex++;
             
-            // Check if we've completed all tricks (all 3 tricks attempted)
-            if (state.currentTrickIndex >= TRICK_ORDER.length) {
+            // For session 4, wrap around infinitely instead of ending
+            if (sessionNum === '4' && state.currentTrickIndex >= TRICK_ORDER.length) {
+                state.currentTrickIndex = 0; // Wrap around to start
+            }
+            
+            // Check if we've completed all tricks (all 3 tricks attempted) - skip for infinite session 4
+            if (sessionNum !== '4' && state.currentTrickIndex >= TRICK_ORDER.length) {
                 // All tricks attempted - end session regardless of success/failure
                 setTimeout(() => endGame(), 1300);
                 return;
@@ -307,8 +331,13 @@
             // Check if game is still active
             if (!gameActive && useParentTimer) return;
             
-            // Check if we've completed all tricks (3 tricks total)
-            if (state.currentTrickIndex >= TRICK_ORDER.length) {
+            // For session 4, wrap around infinitely instead of ending
+            if (sessionNum === '4' && state.currentTrickIndex >= TRICK_ORDER.length) {
+                state.currentTrickIndex = 0; // Wrap around to start
+            }
+            
+            // Check if we've completed all tricks (3 tricks total) - skip for infinite session 4
+            if (sessionNum !== '4' && state.currentTrickIndex >= TRICK_ORDER.length) {
                 endGame();
                 return;
             }
@@ -803,7 +832,7 @@
             state.gamesCompleted = 0;
             state.currentTrickIndex = 0; // Reset to first trick
             scoreEl.innerText = "0";
-            tricksEl.innerText = `0/${state.maxGames}`;
+            tricksEl.innerText = sessionNum === '4' ? `0/∞` : `0/${state.maxGames}`;
             setTimeout(() => {
                 nextLevel();
             }, 500);
@@ -814,7 +843,7 @@
                 state.gamesCompleted = 0;
                 state.currentTrickIndex = 0; // Reset to first trick
                 scoreEl.innerText = "0";
-                tricksEl.innerText = `0/${state.maxGames}`;
+                tricksEl.innerText = sessionNum === '4' ? `0/∞` : `0/${state.maxGames}`;
                 gameActive = true;
                 nextLevel();
             });
