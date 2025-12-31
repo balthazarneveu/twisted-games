@@ -527,8 +527,8 @@
             stage.innerHTML = `<div class="flex flex-col items-center gap-10">
                 <div class="text-2xl font-black italic">PÉDALE !</div>
                 <div class="flex gap-20">
-                    <div id="pL" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95" style="touch-action: manipulation;">L</div>
-                    <div id="pR" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95" style="touch-action: manipulation;">R</div>
+                    <div id="pL" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95 select-none" style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;">L</div>
+                    <div id="pR" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95 select-none" style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;">R</div>
                 </div>
                 <div class="w-64 h-6 bg-slate-200 rounded-full overflow-hidden border border-slate-300 shadow-inner">
                     <div id="pB" class="h-full bg-blue-500 w-0 transition-all"></div>
@@ -541,15 +541,18 @@
             const pL = document.getElementById('pL'), pR = document.getElementById('pR'), pB = document.getElementById('pB');
             let last = '', progress = 0;
             let lastTapTime = { L: 0, R: 0 };
-            const TAP_DEBOUNCE_MS = 150; // Prevent rapid duplicate taps
+            const TAP_DEBOUNCE_MS = 100; // Reduced debounce for better mobile responsiveness
             
             const h = (s) => {
                 const now = Date.now();
-                // Debounce: ignore taps that are too close together on the same side
+                // Debounce: ignore taps that are too close together on the same side (prevents accidental double-taps)
                 if (s === last && (now - lastTapTime[s]) < TAP_DEBOUNCE_MS) {
                     return;
                 }
-                if (s === last) return; // Still prevent same-side consecutive taps for game logic
+                // Game logic: must alternate L-R-L-R, but allow if enough time has passed
+                if (s === last && (now - lastTapTime[s]) < 200) {
+                    return; // Still prevent same-side consecutive taps for game logic
+                }
                 last = s; 
                 lastTapTime[s] = now;
                 progress += 10; 
@@ -560,48 +563,74 @@
                 if (progress >= 100) updateScore(true, "À FOND !");
             };
             
+            // Mobile-first: direct touch handling without complex logic
             const handlePedalL = (e) => {
-                e.preventDefault();
+                if (e.cancelable) e.preventDefault();
                 e.stopPropagation();
                 h('L');
+                return false;
             };
             
             const handlePedalR = (e) => {
-                e.preventDefault();
+                if (e.cancelable) e.preventDefault();
                 e.stopPropagation();
                 h('R');
+                return false;
             };
             
-            // Use both touchstart and click for maximum compatibility
-            // touchstart fires first on mobile, click fires on desktop and also after touch on some devices
-            // We prevent default on touchstart to avoid the click event firing
-            let touchHandledL = false, touchHandledR = false;
-            
-            // Store references for cleanup
+            // Primary handlers: touchstart for mobile (most reliable)
             const touchStartL = (e) => {
-                touchHandledL = true;
                 handlePedalL(e);
-                setTimeout(() => { touchHandledL = false; }, 300);
             };
             const touchStartR = (e) => {
-                touchHandledR = true;
                 handlePedalR(e);
-                setTimeout(() => { touchHandledR = false; }, 300);
             };
-            const clickL = (e) => {
-                if (!touchHandledL) {
+            
+            // Fallback: pointerdown for broader support
+            const pointerDownL = (e) => {
+                // Only handle if not already handled by touch
+                if (e.pointerType !== 'touch') {
                     handlePedalL(e);
                 }
             };
-            const clickR = (e) => {
-                if (!touchHandledR) {
+            const pointerDownR = (e) => {
+                if (e.pointerType !== 'touch') {
                     handlePedalR(e);
                 }
             };
             
-            pL.addEventListener('touchstart', touchStartL, {passive: false});
+            // Click handler for desktop only (touch devices will have already fired touchstart)
+            let touchStarted = false;
+            const resetTouchFlag = () => { setTimeout(() => { touchStarted = false; }, 300); };
+            const clickL = (e) => {
+                if (!touchStarted) {
+                    handlePedalL(e);
+                }
+            };
+            const clickR = (e) => {
+                if (!touchStarted) {
+                    handlePedalR(e);
+                }
+            };
+            
+            // Mark touch started to prevent click duplication
+            const markTouchL = (e) => {
+                touchStarted = true;
+                touchStartL(e);
+                resetTouchFlag();
+            };
+            const markTouchR = (e) => {
+                touchStarted = true;
+                touchStartR(e);
+                resetTouchFlag();
+            };
+            
+            // Add event listeners - touchstart is primary and must be first
+            pL.addEventListener('touchstart', markTouchL, {passive: false, capture: true});
+            pL.addEventListener('pointerdown', pointerDownL, {passive: false});
             pL.addEventListener('click', clickL, {passive: false});
-            pR.addEventListener('touchstart', touchStartR, {passive: false});
+            pR.addEventListener('touchstart', markTouchR, {passive: false, capture: true});
+            pR.addEventListener('pointerdown', pointerDownR, {passive: false});
             pR.addEventListener('click', clickR, {passive: false});
             
             // Keyboard fallback for PC
@@ -620,9 +649,11 @@
             
             activeCleanup = () => {
                 window.removeEventListener('keydown', handleKeyPress);
-                pL.removeEventListener('touchstart', touchStartL);
+                pL.removeEventListener('touchstart', markTouchL, {capture: true});
+                pL.removeEventListener('pointerdown', pointerDownL);
                 pL.removeEventListener('click', clickL);
-                pR.removeEventListener('touchstart', touchStartR);
+                pR.removeEventListener('touchstart', markTouchR, {capture: true});
+                pR.removeEventListener('pointerdown', pointerDownR);
                 pR.removeEventListener('click', clickR);
             };
         }
