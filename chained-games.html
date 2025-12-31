@@ -90,6 +90,35 @@
             box-sizing: border-box;
         }
 
+        #game-result {
+            color: #fff;
+            font-size: 2rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            margin-bottom: 10px;
+            text-align: center;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #game-result.show {
+            opacity: 1;
+        }
+
+        #game-result.won {
+            color: #4ade80;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.6);
+        }
+
+        #game-result.lost {
+            color: #f87171;
+            text-shadow: 0 0 20px rgba(248, 113, 113, 0.6);
+        }
+
         #total-score {
             color: #fff;
             font-size: 1.5rem;
@@ -286,6 +315,14 @@
                 white-space: normal;
             }
 
+            #game-result {
+                font-size: 1.2rem;
+                letter-spacing: 2px;
+                text-align: center;
+                padding: 0 20px;
+                width: 100%;
+            }
+
             #total-score {
                 font-size: 1rem;
                 letter-spacing: 2px;
@@ -349,6 +386,7 @@
 
 <div id="transition-overlay">
     <div id="transition-text">NEXT GAME...</div>
+    <div id="game-result"></div>
     <div id="total-score">Total Score: 0</div>
 </div>
 
@@ -482,8 +520,29 @@
     let totalScore = 0;
     let gameTransitioning = false;
     let gameScores = {};
+    let gameResults = {}; // Store win/loss for each game
     let gameTimeoutId = null;
     let gamesStarted = false;
+
+    // Determine if a game was won or lost based on score and game type
+    function determineGameResult(gameId, score) {
+        // Games where score > 0 generally means success
+        // But we can have game-specific logic here
+        
+        // For games that start at 0 and can go negative (like sort)
+        if (gameId.startsWith('sort')) {
+            return score > 0 ? 'won' : 'lost';
+        }
+        
+        // For games with positive scoring (most others)
+        // Score > 0 means at least some success
+        if (score > 0) {
+            return 'won';
+        }
+        
+        // Score = 0 or negative means failure
+        return 'lost';
+    }
 
     // Listen for game completion messages from iframes
     window.addEventListener('message', (event) => {
@@ -496,7 +555,9 @@
             console.log('Chained Games: Current game index:', currentGameIndex, 'Current game:', currentGame);
             if (currentGame && currentGame.gameId === game) {
                 gameScores[currentGame.id] = score;
-                console.log('Chained Games: Stored score', score, 'for game', currentGame.id);
+                const result = determineGameResult(game, score);
+                gameResults[currentGame.id] = result;
+                console.log('Chained Games: Stored score', score, 'and result', result, 'for game', currentGame.id);
             }
             totalScore += score;
             console.log('Chained Games: Total score is now:', totalScore);
@@ -523,10 +584,23 @@
 
         const overlay = document.getElementById('transition-overlay');
         const text = document.getElementById('transition-text');
+        const resultDisplay = document.getElementById('game-result');
         const scoreDisplay = document.getElementById('total-score');
         
+        // Get the result for the just-completed game
+        const completedGame = games[currentGameIndex];
+        const gameResult = gameResults[completedGame.id] || 'lost';
+        const gameScore = gameScores[completedGame.id] || 0;
+        
+        // Show result feedback
+        resultDisplay.textContent = gameResult === 'won' ? '✓ SUCCESS' : '✗ FAILED';
+        resultDisplay.className = `show ${gameResult}`;
+        
+        // Show game name and score
+        text.textContent = `${completedGame.label || completedGame.gameId}`;
+        scoreDisplay.textContent = `Score: ${gameScore.toLocaleString()} | Total: ${totalScore.toLocaleString()}`;
+        
         overlay.classList.add('show');
-        scoreDisplay.textContent = `Total Score: ${totalScore}`;
         
         setTimeout(() => {
             // Hide and stop current game
@@ -555,6 +629,7 @@
             if (currentGameIndex >= games.length) {
                 // All games completed - destroy all games and show final score
                 overlay.classList.remove('show');
+                resultDisplay.classList.remove('show', 'won', 'lost');
                 
                 // Destroy all game iframes
                 games.forEach(game => {
@@ -587,14 +662,17 @@
                 return;
             }
 
+            // Prepare for next game
             text.textContent = 'NEXT GAME...';
+            resultDisplay.classList.remove('show', 'won', 'lost');
+            resultDisplay.textContent = '';
             
             setTimeout(() => {
                 overlay.classList.remove('show');
                 showGame(games[currentGameIndex]);
                 gameTransitioning = false;
-            }, 1500);
-        }, 1000);
+            }, 2000);
+        }, 1500);
     }
 
     function startGameTimeout(game) {
@@ -649,6 +727,13 @@
                     clearInterval(window.gameTimeInterval);
                     window.gameTimeInterval = null;
                 }
+                
+                // Mark game as lost on timeout (if score wasn't already recorded)
+                const currentGame = games[currentGameIndex];
+                if (currentGame && !gameScores.hasOwnProperty(currentGame.id)) {
+                    gameScores[currentGame.id] = 0;
+                    gameResults[currentGame.id] = 'lost';
+                }
             }, game.timeout * 1000);
         }
     }
@@ -666,12 +751,15 @@
         // Set final score
         finalValue.textContent = totalScore.toLocaleString();
         
-        // Create score breakdown
+        // Create score breakdown with win/loss indicators
         let breakdownHTML = '<div style="margin-bottom: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 5px;">Score Breakdown</div>';
         games.forEach(game => {
             const score = gameScores[game.id] || 0;
+            const result = gameResults[game.id] || 'lost';
             const gameName = game.label || game.id.charAt(0).toUpperCase() + game.id.slice(1).replace('_', ' ');
-            breakdownHTML += `<div style="margin: 10px 0;">${gameName}: <span style="color: #00f2ff; font-weight: 600;">${score.toLocaleString()}</span></div>`;
+            const resultIcon = result === 'won' ? '✓' : '✗';
+            const resultColor = result === 'won' ? '#4ade80' : '#f87171';
+            breakdownHTML += `<div style="margin: 10px 0;">${resultIcon} ${gameName}: <span style="color: #00f2ff; font-weight: 600;">${score.toLocaleString()}</span> <span style="color: ${resultColor}; font-size: 0.9em;">(${result.toUpperCase()})</span></div>`;
         });
         finalBreakdown.innerHTML = breakdownHTML;
         

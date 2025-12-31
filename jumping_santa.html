@@ -293,18 +293,22 @@
         gameActive = false;
         state = 'GAMEOVER';
         
+        // Win condition: Santa is not frozen (lives > 0)
+        // Score is the distance traveled
+        const finalScore = lives > 0 ? Math.floor(distance) : 0;
+        
         // Notify parent if in iframe
         if (window.parent !== window) {
             window.parent.postMessage({ 
                 type: 'gameComplete', 
                 game: 'santa', 
-                score: score 
+                score: finalScore 
             }, '*');
         }
         
         overlay.style.display = 'flex';
-        document.getElementById('main-title').innerText = "MISSION TERMINÉE ! 🎁";
-        document.getElementById('stats-summary').innerText = `Points : ${score}`;
+        document.getElementById('main-title').innerText = lives > 0 ? "MISSION TERMINÉE ! 🎁" : "CONGELÉ ! ❄️";
+        document.getElementById('stats-summary').innerText = `Distance : ${Math.floor(distance)} m`;
         document.getElementById('play-btn').innerText = "RECOMMENCER";
     }
 
@@ -421,18 +425,23 @@
         gameActive = false;
         state = 'GAMEOVER';
         
+        // Win condition: Santa is not frozen (lives > 0)
+        // Score is the distance traveled
+        const isFrozen = lives <= 0;
+        const finalScore = isFrozen ? 0 : Math.floor(distance);
+        
         // Notify parent if in iframe
         if (window.parent !== window) {
             window.parent.postMessage({ 
                 type: 'gameComplete', 
                 game: 'santa', 
-                score: score 
+                score: finalScore 
             }, '*');
         }
         
         overlay.style.display = 'flex';
         document.getElementById('main-title').innerText = title;
-        document.getElementById('stats-summary').innerText = `Points : ${score}`;
+        document.getElementById('stats-summary').innerText = `Distance : ${Math.floor(distance)} m`;
         document.getElementById('play-btn').innerText = "RECOMMENCER";
     }
 
