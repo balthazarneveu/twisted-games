@@ -17,14 +17,15 @@
 
         /* Timer bar for parent communication */
         #timer-bar {
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.3);
+            height: 8px;
+            background: rgba(0, 0, 0, 0.1);
             width: 100%;
-            z-index: 1000;
+            z-index: 9999;
             overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         #timer-bar-fill {
@@ -32,6 +33,7 @@
             background: linear-gradient(90deg, #ff00ff 0%, #00ffff 100%);
             width: 100%;
             transition: width 0.1s linear;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
         }
 
         /* Fullscreen CSS for iframe mode */
@@ -368,26 +370,38 @@
             const timerFill = document.getElementById('timer-bar-fill');
             if (!timerFill) return;
             
-            const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+            let percentage = 0;
+            
+            if (useParentTimer) {
+                // In iframe mode, use parent timer
+                percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+            } else {
+                // In standalone mode, use level timer
+                percentage = MAX_TIME > 0 ? (levelTimeLeft / MAX_TIME) * 100 : 0;
+            }
+            
             timerFill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
             
             // Change color when time is running low
             if (percentage < 20) {
                 timerFill.style.background = '#ff0000';
+                timerFill.style.boxShadow = '0 0 15px rgba(255, 0, 0, 0.8)';
             } else if (percentage < 50) {
                 timerFill.style.background = '#ff9800';
+                timerFill.style.boxShadow = '0 0 10px rgba(255, 152, 0, 0.6)';
             } else {
                 timerFill.style.background = 'linear-gradient(90deg, #ff00ff 0%, #00ffff 100%)';
+                timerFill.style.boxShadow = '0 0 10px rgba(255, 0, 255, 0.5)';
             }
             
             // Also update circular timer display if visible (for standalone mode)
             if (!useParentTimer && levelTimerDisplay) {
-                const secondsLeft = Math.ceil(timeLeft);
+                const secondsLeft = Math.ceil(levelTimeLeft);
                 levelTimerDisplay.innerText = secondsLeft;
-                const offset = 175.9 - (timeLeft / totalTime) * 175.9;
+                const offset = 175.9 - (levelTimeLeft / MAX_TIME) * 175.9;
                 if (timerCircle) {
                     timerCircle.style.strokeDashoffset = offset;
-                    if (timeLeft <= 5) {
+                    if (levelTimeLeft <= 5) {
                         timerCircle.style.stroke = "#f97316";
                         timerContainer.classList.add('halo-orange');
                         screenAlert.classList.add('screen-alert-active');
@@ -457,12 +471,18 @@
             
             // Only use internal timer if not in iframe mode
             if (!useParentTimer) {
+                // Update timer bar initially
+                updateTimerBar();
+                
                 mainTimerInterval = setInterval(() => {
                     if (!gameActive) return;
                     
                     updateScore(-1);
                     levelTimeLeft--;
                     levelTimerDisplay.innerText = levelTimeLeft;
+                    
+                    // Update timer bar
+                    updateTimerBar();
                     
                     const offset = 175.9 - (levelTimeLeft / MAX_TIME) * 175.9;
                     timerCircle.style.strokeDashoffset = offset;
@@ -507,6 +527,9 @@
             screenAlert.classList.remove('screen-alert-active');
             validateBtn.classList.remove('btn-panic');
             validateBtn.innerText = "Valider l'ordre";
+            
+            // Reset timer bar
+            updateTimerBar();
             
             // Update level badge - show single level if in single level mode
             if (isSingleLevelMode) {
