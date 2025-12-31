@@ -409,7 +409,7 @@
         if (!game.active) return;
         game.active = false;
         clearInterval(game.timer);
-        game.score++;
+        game.score += 100;
         game.gamesCompleted++;
         updateHeader();
         document.body.classList.add('success-bg');

@@ -220,7 +220,7 @@
             if (state.timerInterval) clearInterval(state.timerInterval);
             
             if (success) {
-                state.score++;
+                state.score += 100;
                 state.gamesCompleted++;
                 scoreEl.classList.add('score-pop');
                 setTimeout(() => scoreEl.classList.remove('score-pop'), 300);

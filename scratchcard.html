@@ -338,7 +338,7 @@
                 el.innerHTML = `<span class="text-4xl filter drop-shadow-md">${icon}</span>`;
                 
                 prizeLayer.appendChild(el);
-                symbols.push({ x, y, value: isBomb ? -500 : 100, element: el, collected: false, isBomb });
+                symbols.push({ x, y, value: isBomb ? -500 : 30, element: el, collected: false, isBomb });
             }
         }
 
@@ -434,7 +434,7 @@
                 particleCount: 20, colors: ['#fbbf24', '#ffffff'], scalar: 0.8,
                 origin: { x: (canvas.offsetLeft + p.x) / window.innerWidth, y: (canvas.offsetTop + p.y) / window.innerHeight }
             });
-            createFloater(p, `+$100`, 'float-plus');
+            createFloater(p, `+$30`, 'float-plus');
         }
 
         function createFloater(p, text, className) {

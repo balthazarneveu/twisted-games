@@ -567,7 +567,7 @@
             event.pairs.forEach(pair => {
                 const b = pair.bodyA.label.includes('bumper') ? pair.bodyA : (pair.bodyB.label.includes('bumper') ? pair.bodyB : null);
                 if (b) {
-                    score += 500; document.getElementById('score').innerText = score.toString().padStart(6, '0');
+                    score += 5; document.getElementById('score').innerText = score.toString().padStart(6, '0');
                     b.hitEffect = 1.0; 
                     if (b.label === 'crown-bumper') { wizardModeTimer = 180; spawnWizardParticles(b.position.x, b.position.y); }
                     else spawnParticles(ball.position.x, ball.position.y, b.render.glow);
@@ -575,7 +575,7 @@
                 const m = (pair.bodyA.label === 'mirror-seg' || pair.bodyA.label === 'mirror-bottom') ? pair.bodyA : 
                           ((pair.bodyB.label === 'mirror-seg' || pair.bodyB.label === 'mirror-bottom') ? pair.bodyB : null);
                 if (m && !mirrorBroken) {
-                    mirrorHealth--; mirrorFlash = 1.0; score += 1500; smashTextTimer = 80; generateCracks(ball.position.x, ball.position.y);
+                    mirrorHealth--; mirrorFlash = 1.0; score += 15; smashTextTimer = 80; generateCracks(ball.position.x, ball.position.y);
                     document.getElementById('score').innerText = score.toString().padStart(6, '0');
                     if (mirrorHealth <= 0) shatterMirror(); else spawnParticles(ball.position.x, ball.position.y, '#00ffff');
                 }
@@ -625,7 +625,7 @@
 
     function shatterMirror() {
         mirrorBroken = true; mirrorSegments.forEach(seg => World.remove(engine.world, seg));
-        mirrorSegments = []; mirrorCracks = []; score += 30000;
+        mirrorSegments = []; mirrorCracks = []; score += 300;
         document.getElementById('score').innerText = score.toString().padStart(6, '0');
         // Reduced particle count for better performance on mobile
         const particleCount = isMobile ? 35 : 60;

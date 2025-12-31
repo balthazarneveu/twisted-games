@@ -237,7 +237,7 @@
         <button id="validate-btn" onclick="checkWin()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-all duration-300">
             Valider l'ordre
         </button>
-        <p class="text-center text-[10px] text-slate-400 mt-2 font-bold uppercase">+200 pts/Victoire | Erreur = -50 pts</p>
+        <p class="text-center text-[10px] text-slate-400 mt-2 font-bold uppercase">+600 pts/Victoire | Erreur = -50 pts</p>
     </div>
 
     <div id="modal" class="fixed inset-0 bg-slate-900/95 flex items-center justify-center hidden z-[200] backdrop-blur-md">
@@ -337,7 +337,7 @@
         let startTop = 0;
         const itemHeight = 75; 
 
-        let score = 200;
+        let score = 0;
         const MAX_TIME = 23;
         let levelTimeLeft = MAX_TIME;
         let gameActive = false;
@@ -553,7 +553,7 @@
         
         function init() {
             // Reset score on start
-            score = 200;
+            score = 0;
             scoreDisplay.innerText = score;
             gameCompleted = false;
             
@@ -677,7 +677,7 @@
                 clearInterval(mainTimerInterval);
                 screenAlert.classList.remove('screen-alert-active');
                 validateBtn.classList.remove('btn-panic');
-                if (!forceNext) updateScore(200); 
+                if (!forceNext) updateScore(600); 
                 listWrapper.querySelectorAll('.label-text').forEach(t => t.style.opacity = '1');
                 
                 // In iframe mode with single level, end immediately without showing modal

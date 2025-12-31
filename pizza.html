@@ -173,7 +173,7 @@
         window.addEventListener('touchmove', e => { e.preventDefault(); handleInput(e.touches[0].clientX); }, {passive: false});
 
         function updateScoreDisplay() {
-            scoreEl.innerText = stack.length;
+            scoreEl.innerText = stack.length * 40;
         }
 
         function updateTimerBar() {
@@ -239,11 +239,11 @@
             
             // Notify parent if in iframe
             if (window.parent !== window) {
-                window.parent.postMessage({ 
-                    type: 'gameComplete', 
-                    game: 'pizza',
-                    score: stack.length 
-                }, '*');
+            window.parent.postMessage({ 
+                type: 'gameComplete', 
+                game: 'pizza',
+                score: stack.length * 40 
+            }, '*');
             }
         }
 

@@ -365,13 +365,13 @@
                     // Wait a moment to show the win effect, then end the game
                     if (now - winTime > 1000) {
                         // Increment score for the win before ending
-                        if (score === 0) score = 1; // Ensure at least 1 point for winning
+                        if (score === 0) score = 200; // Ensure at least 200 points for winning
                         endGame();
                         return;
                     }
                 } else if (now - winTime > 1500) {
                     // Standalone mode: auto-restart
-                    score++;
+                    score += 200;
                     initLevel();
                 }
             } else {
@@ -402,7 +402,7 @@
                 if (match) {
                     isWon = true; winTime = now;
                     // Increment score when you win (in chained mode, this will be sent when game ends)
-                    score++;
+                    score += 200;
                     Object.assign(player, target);
                     statusMsg.style.opacity = '1'; statusMsg.style.transform = 'scale(1.2)';
                     for(let i=0; i<60; i++) sparkles.push(new Sparkle());
