@@ -233,7 +233,8 @@
             }
             
             scoreEl.innerText = state.score;
-            state.difficulty = 1 + (state.score * 0.05);
+            // Fixed difficulty for Zen Edition - no scaling with score
+            state.difficulty = 1.0;
             
             // Move to next trick index (always continue after failure)
             state.currentTrickIndex++;
