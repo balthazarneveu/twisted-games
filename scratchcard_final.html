@@ -139,7 +139,7 @@
         <!-- Header -->
         <div class="absolute top-8 w-full max-w-[320px] flex justify-between items-end px-2 z-20">
             <div>
-                <p id="level-indicator" class="text-[10px] uppercase font-black tracking-[0.2em] text-yellow-500 mb-1">LEVEL 4: FINAL</p>
+                <p id="level-indicator" class="text-[10px] uppercase font-black tracking-[0.2em] text-yellow-500 mb-1">NIVEAU 4 : FINAL</p>
                 <div id="total-score" class="text-4xl font-black text-white">$0</div>
             </div>
         </div>
@@ -152,7 +152,7 @@
 
         <div id="danger-bar" class="mt-8 flex items-center gap-2 px-4 py-2 rounded-full border border-white/5 opacity-40">
             <span id="danger-icon">💀</span>
-            <p id="danger-text" class="text-[10px] font-bold uppercase tracking-wider text-white/60">Danger: 7 Bombs</p>
+            <p id="danger-text" class="text-[10px] font-bold uppercase tracking-wider text-white/60">Danger : 7 Bombes</p>
         </div>
 
     </div>
@@ -165,14 +165,14 @@
         const timerDisplay = document.getElementById('timer-display');
 
         const LEVEL = {
-            name: "Final Hell",
+            name: "Enfer Final",
             icon: "💀",
-            desc: "Total Chaos: 7 bombs. Paper-thin foil. Avoid the red pulse at all costs.",
+            desc: "Chaos total : 7 bombes. Feuille ultra fine. Évite le pouls rouge à tout prix.",
             bombs: 7,
             scratchOpacity: 1.0,
             threshold: 15,
             time: 10000,
-            danger: "Danger: 7 Bombs"
+            danger: "Danger : 7 Bombes"
         };
 
         let state = 'READY';
@@ -219,7 +219,7 @@
         }
 
         function initLevel() {
-            document.getElementById('level-indicator').textContent = `Level 4: ${LEVEL.name}`;
+            document.getElementById('level-indicator').textContent = `Niveau 4 : ${LEVEL.name}`;
             document.getElementById('danger-icon').textContent = LEVEL.icon;
             document.getElementById('danger-text').textContent = LEVEL.danger;
             document.getElementById('danger-bar').style.opacity = "1";

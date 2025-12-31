@@ -125,14 +125,14 @@
     <!-- Header -->
     <div class="w-full text-center py-4 shrink-0">
         <h1 class="text-xl md:text-2xl font-bold tracking-[0.6em] uppercase neon-text italic">Resonance</h1>
-        <p id="level-name" class="text-[9px] uppercase tracking-[0.4em] text-cyan-400 opacity-50 mt-1">Classic Sine</p>
+        <p id="level-name" class="text-[9px] uppercase tracking-[0.4em] text-cyan-400 opacity-50 mt-1">Sinusoïde Classique</p>
     </div>
 
     <!-- Main Game Area -->
     <div id="canvas-container" class="relative w-full flex-grow flex items-center justify-center overflow-hidden">
         <canvas id="gameCanvas" class="w-full h-full"></canvas>
         <div id="status-msg" class="absolute font-bold tracking-[0.5em] text-white uppercase text-sm opacity-0 scale-50 z-10">
-            Resonated
+            Résonance
         </div>
     </div>
 
@@ -142,7 +142,7 @@
         <!-- Primary Freq Slider -->
         <div id="group-f1" class="control-group space-y-2 mb-4">
             <div class="flex justify-between text-[10px] text-cyan-400 font-bold uppercase tracking-widest opacity-60">
-                <span id="label-f1">Frequency</span>
+                <span id="label-f1">Fréquence</span>
                 <span id="val-f1" class="font-mono text-xs">4.0</span>
             </div>
             <input type="range" id="slider-f1" min="1.0" max="8.0" step="0.01" value="4">
@@ -160,7 +160,7 @@
         <!-- Tertiary Slider -->
         <div id="group-f2" class="control-group space-y-2 control-hidden">
             <div class="flex justify-between text-[10px] text-emerald-400 font-bold uppercase tracking-widest opacity-60">
-                <span id="label-f2">Depth</span>
+                <span id="label-f2">Profondeur</span>
                 <span id="val-f2" class="font-mono text-xs">1.0</span>
             </div>
             <input type="range" id="slider-f2" min="0.0" max="1.0" step="0.01" value="0.5">
@@ -212,9 +212,9 @@
         let loopRunning = false;
 
         const LEVELS = [
-            { type: 'classic', dur: 12000, name: 'Classic Resonance' },
-            { type: 'mod', dur: 16000, name: 'Amplitude Modulation' },
-            { type: 'decay', dur: 8000, name: 'Exponential Decay' }
+            { type: 'classic', dur: 12000, name: 'Résonance Classique' },
+            { type: 'mod', dur: 16000, name: 'Modulation d\'Amplitude' },
+            { type: 'decay', dur: 8000, name: 'Décroissance Exponentielle' }
         ];
 
         function forceResize() {
@@ -242,7 +242,7 @@
             // Ensure sliders are always interactive
             groups.p.style.pointerEvents = 'auto';
             groups.f2.style.pointerEvents = 'auto';
-            labels.labelF1.innerText = "Frequency";
+            labels.labelF1.innerText = "Fréquence";
             labels.labelP.innerText = "Phase";
             sliders.f1.min = "1.0"; sliders.f1.max = "8.0"; sliders.f1.step = "0.01";
             sliders.p.min = "0.0"; sliders.p.max = "6.28"; sliders.p.step = "0.01";
@@ -260,16 +260,16 @@
                 // Ensure sliders are always interactive
                 groups.p.style.pointerEvents = 'auto';
                 groups.f2.style.pointerEvents = 'auto';
-                labels.labelF1.innerText = "Carrier Multiplier";
-                labels.labelF2.innerText = "Symmetry Depth";
+                labels.labelF1.innerText = "Multiplicateur Porteur";
+                labels.labelF2.innerText = "Profondeur de Symétrie";
                 sliders.f1.min = "1.0"; sliders.f1.max = "10.0"; sliders.f1.step = "1.0";
                 sliders.f1.value = 5.0;
                 sliders.f2.value = 0.5;
             } else if (currentLevel === 'decay') {
                 target.f1 = 0.05 + Math.random() * 0.15; 
                 target.p = 2 + Math.random() * 6; 
-                labels.labelF1.innerText = "Decay Coefficient";
-                labels.labelP.innerText = "Oscillation Speed";
+                labels.labelF1.innerText = "Coefficient de Décroissance";
+                labels.labelP.innerText = "Vitesse d'Oscillation";
                 sliders.f1.min = "0.01"; sliders.f1.max = "0.3";
                 sliders.p.min = "1.0"; sliders.p.max = "10.0";
                 sliders.f1.value = 0.1;

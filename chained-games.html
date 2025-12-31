@@ -131,6 +131,20 @@
             box-sizing: border-box;
         }
 
+        #game-instruction {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.2rem;
+            font-weight: 400;
+            letter-spacing: 2px;
+            text-align: center;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            margin-top: 20px;
+            padding: 0 40px;
+            line-height: 1.6;
+        }
+
         #final-score-screen {
             position: fixed;
             top: 0;
@@ -331,6 +345,12 @@
                 width: 100%;
             }
 
+            #game-instruction {
+                font-size: 0.9rem;
+                letter-spacing: 1px;
+                padding: 0 20px;
+            }
+
             #final-score-screen {
                 padding: 20px 10px 10px;
             }
@@ -386,6 +406,7 @@
 
 <div id="transition-overlay">
     <div id="transition-text">PROCHAIN JEU...</div>
+    <div id="game-instruction"></div>
     <div id="game-result"></div>
     <div id="total-score">Score total : 0</div>
 </div>
@@ -431,35 +452,34 @@
     // Game session configuration - define the sequence of games to play
     // You can add the same game multiple times by using different instance IDs
     const GAME_SESSION = [
-        { gameId: 'ride_routine1', label: 'Rider Routine 1' },
-        { gameId: 'scratchcard_zen', label: 'Gratte Zen' },
-        { gameId: 'morning_rush1', label: 'Morning Rush 1' },
-        { gameId: 'sort6', label: 'Speedrun: La Journée' },
-        { gameId: 'resonance', label: 'Resonance 2' },
-        { gameId: 'pinball', label: 'Pinball Wizard' },
-        
-        { gameId: 'santa', label: 'Jumping Santa' },
-        { gameId: 'ride_routine2', label: 'Rider Routine 2' },
-        { gameId: 'sort2', label: 'Speedrun: Reine des Neiges' },
-        { gameId: 'recycle1', label: 'Eco-Tri: Compost' },
-        { gameId: 'scratchcard_danger', label: 'Danger Zone' },
-        { gameId: 'morning_rush3', label: 'Morning Rush 3' },
-        { gameId: 'sort1', label: 'Speedrun: Harry Potter' },
-        { gameId: 'scratchcard_minefield', label: 'Minefield' },
-        { gameId: 'sort5', label: 'Speedrun: Inventions' },
-        { gameId: 'pizza', label: 'Pizza Stack Panic' },
-        { gameId: 'morning_rush2', label: 'Morning Rush 2' },
+        { gameId: 'ride_routine1', label: 'Rider Routine 1', instruction: 'Réalise 3 actions rapides de rider!' },
+        { gameId: 'scratchcard_zen', label: 'Gratte Zen', instruction: '!Grattes bien la carte jusqu\'à ce que les symboles scintillent!' },
+        { gameId: 'morning_rush1', label: 'Morning Rush 1', instruction: 'Réalise 3 actions matinales rapidement. Suis les instructions!' },
+        { gameId: 'sort6', label: 'Speedrun: La Journée', instruction: 'Classe les événements dans l\'ordre chronologique!' },
+        { gameId: 'resonance', label: 'Resonance 2', instruction: 'Ajuste les fréquences pour faire correspondre les ondes!' },
+        { gameId: 'pinball', label: 'Pinball Wizard', instruction: 'Tapes gauche / droite pour le flipper! Atteins le sorcier en cassant le miroir!' },
+        { gameId: 'santa', label: 'Jumping Santa', instruction: 'Tapes sur le père Noël pour éviter les bonhommes de neige. Le champagne ralentit le temps!' },
+        { gameId: 'ride_routine2', label: 'Rider Routine 2', instruction: 'Wax le curb, tailwhip, resserres ton matos!' },
+        { gameId: 'sort2', label: 'Speedrun: Reine des Neiges', instruction: 'Classe les événements du dessin animé dans l\'ordre!' },
+        { gameId: 'recycle1', label: 'Eco-Tri: Compost', instruction: 'Attrape les déchets organiques dans la poubelle verte!' },
+        { gameId: 'scratchcard_danger', label: 'Danger Zone', instruction: 'Gratte mais prudemment. Il y a des bombes cachées!' },
+        { gameId: 'morning_rush3', label: 'Morning Rush 3', instruction: '3 actions matinales à faire rapidement pour ne pas être en retard!' },
+        { gameId: 'sort1', label: 'Speedrun: Harry Potter', instruction: 'Classe les événements du film de Harry Potter dans l\'ordre!' },
+        { gameId: 'scratchcard_minefield', label: 'Minefield', instruction: 'Gratte avec précaution car des bombes se cachent!' },
+        { gameId: 'sort5', label: 'Speedrun: Inventions', instruction: 'Classe les inventions par ordre chronologique!' },
+        { gameId: 'pizza', label: 'Pizza Stack Panic', instruction: 'Empile les pizzas sans faire tomber la tour!' },
+        { gameId: 'morning_rush2', label: 'Morning Rush 2', instruction: '3 actions matinales. Café, ballon, réveil!' },
         // { gameId: 'zen', label: 'Sérénité Absolue' },
-        { gameId: 'resonance', label: 'Resonance 1' },
-        { gameId: 'sort4', label: 'Speedrun: Histoire de France' },
-        { gameId: 'recycle3', label: 'Eco-Tri: Encombrants' },
-        { gameId: 'snow', label: 'Snow Ninja' },
-        { gameId: 'ride_routine3', label: 'Rider Routine 3' },
-        { gameId: 'scratchcard_final', label: 'Final Hell' },
-        { gameId: 'morning_rush4', label: 'Morning Rush 4' },
-        { gameId: 'sort3', label: 'Speedrun: Les Saisons' },
-        { gameId: 'recycle2', label: 'Eco-Tri: Recyclage' },
-        { gameId: 'morning_rush5', label: 'Morning Rush 5' },
+        { gameId: 'resonance', label: 'Resonance 1', instruction: 'Ajuste les fréquences pour synchroniser les ondes!' },
+        { gameId: 'sort4', label: 'Speedrun: Histoire de France', instruction: 'Classe ces événements historiques français dans l\'ordre!' },
+        { gameId: 'recycle2', label: 'Eco-Tri: Recyclage', instruction: 'Mets les emballages recyclables et le papier dans la poubelle jaune!' },
+        { gameId: 'snow', label: 'Snow Ninja', instruction: 'Eclates un max de flocons de neige avec ton doigt avant qu\'ils touchent le sol!' },
+        { gameId: 'ride_routine3', label: 'Rider Routine 3', instruction: '3 tricks à réaliser rapidement!' },
+        { gameId: 'scratchcard_final', label: 'Final Hell', instruction: 'Gratte ce banco avec extrême prudence. Mode infernal!' },
+        { gameId: 'morning_rush4', label: 'Morning Rush 4', instruction: '3 actions matinales et n\'oublie pas le dentifrice!' },
+        { gameId: 'sort3', label: 'Speedrun: Les Saisons', instruction: 'Classe les saisons et leurs événements!' },
+        { gameId: 'recycle3', label: 'Eco-Tri: Encombrants', instruction: 'Mets les gros objets encombrants dans la benne!' },
+        { gameId: 'morning_rush5', label: 'Morning Rush 5', instruction: 'Champagne!' },
     ];
 
     // Game definitions - maps game IDs to their files and settings
@@ -512,7 +532,8 @@
             iframeId: iframeId,
             file: gameDef.file,
             timeout: gameDef.timeout,
-            label: sessionItem.label || sessionItem.gameId
+            label: sessionItem.label || sessionItem.gameId,
+            instruction: sessionItem.instruction || ''
         };
     }).filter(g => g !== null);
 
@@ -584,6 +605,7 @@
 
         const overlay = document.getElementById('transition-overlay');
         const text = document.getElementById('transition-text');
+        const instructionDisplay = document.getElementById('game-instruction');
         const resultDisplay = document.getElementById('game-result');
         const scoreDisplay = document.getElementById('total-score');
         
@@ -599,6 +621,7 @@
         // Show game name and score
         text.textContent = `${completedGame.label || completedGame.gameId}`;
         scoreDisplay.textContent = `Score : ${gameScore.toLocaleString()} | Total : ${totalScore.toLocaleString()}`;
+        instructionDisplay.textContent = ''; // Clear instruction during result display
         
         overlay.classList.add('show');
         
@@ -630,6 +653,7 @@
                 // All games completed - destroy all games and show final score
                 overlay.classList.remove('show');
                 resultDisplay.classList.remove('show', 'won', 'lost');
+                instructionDisplay.textContent = '';
                 
                 // Destroy all game iframes
                 games.forEach(game => {
@@ -662,16 +686,18 @@
                 return;
             }
 
-            // Prepare for next game
-            text.textContent = 'PROCHAIN JEU...';
+            // Prepare for next game - show instruction
+            const nextGame = games[currentGameIndex];
+            text.textContent = nextGame.label || 'PROCHAIN JEU...';
+            instructionDisplay.textContent = nextGame.instruction || '';
             resultDisplay.classList.remove('show', 'won', 'lost');
             resultDisplay.textContent = '';
             
             setTimeout(() => {
                 overlay.classList.remove('show');
-                showGame(games[currentGameIndex]);
+                showGame(nextGame);
                 gameTransitioning = false;
-            }, 2000);
+            }, 3000); // 3 seconds to read instruction
         }, 1500);
     }
 
