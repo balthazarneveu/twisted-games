@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choisissez votre jeu - Mini jeux fous</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+            margin: 0;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .back-link {
+            display: inline-block;
+            color: #666;
+            text-decoration: none;
+            margin-bottom: 30px;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        .back-link:hover {
+            color: #333;
+        }
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .game-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-align: center;
+        }
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+        .game-title {
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-transform: capitalize;
+        }
+        .game-button {
+            display: inline-block;
+            padding: 12px 25px;
+            background: linear-gradient(to bottom, #020c1b 0%, #0a2a5a 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 300;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        .game-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        .game-button:active {
+            transform: translateY(0);
+        }
+        @media (max-width: 768px) {
+            .games-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="index.html" class="back-link">← Retour à l'accueil</a>
+        <h1>Choisissez votre jeu</h1>
+        <p style="color: #666;">Sélectionnez un mini jeu à jouer</p>
+    </div>
+    
+    <div class="games-grid">
+        <div class="game-card">
+            <div class="game-title">Chained Games</div>
+            <a href="chained-games.html" class="game-button">Jouer</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Jumping Santa</div>
+            <a href="jumping_santa.html" class="game-button">Jouer</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Morning Rush</div>
+            <a href="morning_rush.html" class="game-button">Play</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Pinball Wizard</div>
+            <a href="pinball_wizard.html" class="game-button">Play</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Pizza Stack</div>
+            <a href="pizza.html" class="game-button">Play</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Recycle</div>
+            <a href="recycle.html" class="game-button">Play</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Resonance</div>
+            <a href="resonance.html" class="game-button">Play</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Ride Routine</div>
+            <a href="ride_routine.html" class="game-button">Play</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Scratchcard</div>
+            <a href="scratchcard.html" class="game-button">Jouer</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Snow Ninja</div>
+            <a href="snow_ninja.html" class="game-button">Play</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Sort</div>
+            <a href="sort.html" class="game-button">Play</a>
+        </div>
+        
+        <div class="game-card">
+            <div class="game-title">Zen Browser</div>
+            <a href="zen_browser.html" class="game-button">Play</a>
+        </div>
+    </div>
+</body>
+</html>
+

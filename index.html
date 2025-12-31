@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -48,12 +48,53 @@
         .game-button:active {
             transform: translateY(0);
         }
+        .start-button {
+            animation: blink 1.5s ease-in-out infinite;
+            margin-bottom: 30px;
+            padding: 20px 40px;
+            font-size: 24px;
+        }
+        .locked-section {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #e8e8e8;
+            border-radius: 15px;
+            border: 2px dashed #999;
+            opacity: 0.6;
+        }
+        .locked-section .emoji {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .locked-section .text {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .locked-section .game-button {
+            opacity: 0.8;
+        }
+        @keyframes blink {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.7;
+                transform: scale(1.05);
+            }
+        }
     </style>
 </head>
 <body>
+    <a href="chained-games.html" class="game-button start-button">DÉMARRER</a>
     <h1>Les mini jeux fous de Balthou</h1>
     <img src="teaser.png" alt="Teaser image">
-    <a href="chained-games.html" class="game-button">START</a>
+    <div class="locked-section">
+        <div class="emoji">🔒</div>
+        <a href="game-selector.html" class="game-button">CHOISIR UN JEU</a>
+        <div class="text">Ne pas toucher</div>
+    </div>
 </body>
 </html>
 
