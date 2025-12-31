@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Matrix Hunter - Assisted Final Lock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
+
+        :root {
+            --matrix-green: #22c55e;
+            --matrix-red: #ef4444;
+            --matrix-blue: #3b82f6;
+        }
+
+        body {
+            font-family: 'Fira+Code', monospace;
+            background-color: #000;
+            overflow: hidden;
+            touch-action: manipulation;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100dvh;
+            max-width: calc(100dvh * (9 / 16));
+            aspect-ratio: 9 / 16;
+            background-color: #020617;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            box-shadow: 0 0 50px rgba(0,0,0,1);
+        }
+
+        .matrix-cell {
+            transition: all 0.1s ease;
+        }
+
+        /* Target Style */
+        .target-active {
+            color: #ffffff !important;
+            text-shadow: 0 0 15px var(--matrix-green), 0 0 30px var(--matrix-green);
+            transform: scale(1.15);
+            z-index: 20;
+            background-color: rgba(34, 197, 94, 0.4) !important;
+            border: 2px solid #fff !important;
+        }
+
+        /* Special Final Target Style - More visible and larger pulse */
+        .final-target-active {
+            color: #fff !important;
+            text-shadow: 0 0 20px var(--matrix-blue), 0 0 40px var(--matrix-blue);
+            background-color: rgba(59, 130, 246, 0.3) !important;
+            border: 2px solid var(--matrix-blue) !important;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+            animation: finalPulse 0.4s infinite alternate;
+        }
+
+        @keyframes finalPulse {
+            from { transform: scale(1.1); filter: brightness(1); }
+            to { transform: scale(1.25); filter: brightness(1.5); }
+        }
+
+        .decoy-active {
+            color: var(--matrix-red) !important;
+            text-shadow: 0 0 15px var(--matrix-red);
+            transform: scale(1.1);
+            z-index: 20;
+            background-color: rgba(239, 68, 68, 0.3) !important;
+            border: 1px solid var(--matrix-red) !important;
+        }
+
+        .flash-green { animation: flashGreen 0.3s ease-out; }
+        @keyframes flashGreen {
+            0% { background-color: rgba(34, 197, 94, 0); }
+            50% { background-color: rgba(34, 197, 94, 0.4); }
+            100% { background-color: rgba(34, 197, 94, 0); }
+        }
+
+        .flash-blue { animation: flashBlue 0.4s ease-out; }
+        @keyframes flashBlue {
+            0% { background-color: rgba(59, 130, 246, 0); }
+            50% { background-color: rgba(59, 130, 246, 0.4); }
+            100% { background-color: rgba(59, 130, 246, 0); }
+        }
+
+        .flash-red { animation: flashRed 0.4s ease-in-out; }
+        @keyframes flashRed {
+            0% { background-color: rgba(239, 68, 68, 0); }
+            50% { background-color: rgba(239, 68, 68, 0.6); }
+            100% { background-color: rgba(239, 68, 68, 0); }
+        }
+
+        .glitch-subtle { animation: glitch 0.15s infinite; }
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 1px); }
+            40% { transform: translate(2px, -1px); }
+            100% { transform: translate(0); }
+        }
+
+        .progress-node { transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .progress-active {
+            background-color: var(--matrix-green);
+            box-shadow: 0 0 15px var(--matrix-green);
+            transform: scale(1.3);
+        }
+
+        .final-lock-node {
+            background-color: var(--matrix-blue) !important;
+            box-shadow: 0 0 20px var(--matrix-blue) !important;
+            animation: pulse-blue 0.4s infinite alternate;
+        }
+
+        @keyframes pulse-blue {
+            from { opacity: 0.4; transform: scale(1); }
+            to { opacity: 1; transform: scale(1.4); }
+        }
+
+        .critical-bg {
+            background: radial-gradient(circle, rgba(153, 27, 27, 0.2) 0%, rgba(2, 6, 23, 1) 100%) !important;
+        }
+
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="flash-overlay" class="absolute inset-0 pointer-events-none z-50"></div>
+
+        <!-- Header UI -->
+        <div id="top-bar" class="p-4 flex flex-col gap-3 z-40 bg-slate-950/90 backdrop-blur-md border-b border-red-900/40">
+            <div class="flex justify-between items-end">
+                <div class="flex flex-col">
+                    <span class="text-[10px] uppercase opacity-60 font-bold tracking-widest text-slate-400">Temps_Restant</span>
+                    <span id="timer-display" class="text-3xl font-bold text-white tabular-nums leading-none">20.0s</span>
+                </div>
+                <div class="flex flex-col items-center">
+                    <span id="target-label" class="text-[10px] uppercase font-black tracking-tighter text-red-500 animate-pulse">Scanning...</span>
+                    <span id="target-symbol-display" class="text-5xl drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">☯️</span>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-[10px] uppercase opacity-60 font-bold tracking-widest text-slate-400">Charge_CPU</span>
+                    <span id="speed-display" class="text-sm font-black text-red-500 uppercase">Critique</span>
+                </div>
+            </div>
+
+            <div class="flex justify-between px-2">
+                <div id="p-0" class="progress-node w-4 h-1.5 rounded-full bg-slate-800"></div>
+                <div id="p-1" class="progress-node w-4 h-1.5 rounded-full bg-slate-800"></div>
+                <div id="p-2" class="progress-node w-4 h-1.5 rounded-full bg-slate-800"></div>
+                <div id="p-3" class="progress-node w-4 h-1.5 rounded-full bg-slate-800"></div>
+                <div id="p-4" class="progress-node w-4 h-1.5 rounded-full bg-slate-800"></div>
+            </div>
+        </div>
+
+        <!-- Grid Area -->
+        <div id="game-grid" class="flex-grow grid grid-cols-6 grid-rows-10 gap-1 p-2 bg-black/20"></div>
+
+        <div id="aid-message" class="absolute bottom-16 left-0 w-full text-center opacity-0 transition-opacity duration-500 pointer-events-none">
+            <span class="bg-blue-600/80 text-white text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-widest">Aide au décryptage active</span>
+        </div>
+
+        <div class="p-2 text-center border-t border-slate-900 bg-black/40">
+            <span class="text-[8px] uppercase tracking-[0.3em] opacity-30 text-green-500 italic">Secure Protocol v4.5 // Hitbox Assist Active</span>
+        </div>
+
+        <!-- Modal -->
+        <div id="modal" class="absolute inset-0 bg-slate-950/98 flex items-center justify-center z-50 p-10 text-center">
+            <div class="w-full">
+                <div id="modal-icon-bg" class="mb-6 inline-block p-6 bg-red-600/20 rounded-full border border-red-500/50">
+                    <span id="modal-icon" class="text-5xl">⚠️</span>
+                </div>
+                <h1 id="modal-title" class="text-4xl font-black mb-4 text-red-500 italic uppercase tracking-tighter">Surcharge</h1>
+                <p id="modal-desc" class="mb-10 text-slate-400 text-sm leading-relaxed">
+                    Système corrompu. <br>
+                    Récupérez les 5 fragments.<br>
+                    Le dernier fragment bénéficie d'une <br>
+                    <span class="text-blue-400 font-bold">CORRECTION DE SIGNAL</span>.
+                </p>
+                <button id="start-btn" class="w-full bg-red-600 text-white font-black py-5 rounded-lg hover:bg-red-500 transition-all active:scale-95 uppercase tracking-widest shadow-2xl shadow-red-500/30">
+                    Initialiser
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const gridElement = document.getElementById('game-grid');
+        const timerDisplay = document.getElementById('timer-display');
+        const targetDisplay = document.getElementById('target-symbol-display');
+        const targetLabel = document.getElementById('target-label');
+        const speedDisplay = document.getElementById('speed-display');
+        const flashOverlay = document.getElementById('flash-overlay');
+        const topBar = document.getElementById('top-bar');
+        const modal = document.getElementById('modal');
+        const startBtn = document.getElementById('start-btn');
+        const gameContainer = document.getElementById('game-container');
+        const aidMessage = document.getElementById('aid-message');
+
+        const ROWS = 10;
+        const COLS = 6;
+        const SYMBOLS = ['☯️', '👁️', '💠', '☣️', '☢️', '⚡', '♾️', '💎', '🔑', '🎯', '💾', '🛰️', '🔥', '🛡️', '🧬'];
+        const DECOY_SYMBOL = '💣';
+        const TARGETS_REQUIRED = 5;
+        const INITIAL_TIME = 20;
+        const COOLING_RATE = 0.07;
+
+        let foundCount = 0;
+        let gameActive = false;
+        let currentTarget = '';
+        let difficultyFactor = 4.0; 
+        let cells = [];
+        let spawnTimer = null;
+        let decoyTimer = null;
+        let gameTimerInterval = null;
+        let timeLeft = INITIAL_TIME;
+        let targetIndex = -1;
+        let decoyIndex = -1;
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(freq, type, duration, volume = 0.1) {
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        function initGrid() {
+            gridElement.innerHTML = '';
+            cells = [];
+            for (let i = 0; i < ROWS * COLS; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'matrix-cell flex items-center justify-center text-lg font-bold bg-slate-900/20 rounded border border-slate-800/20';
+                cell.innerText = Math.floor(Math.random() * 10);
+                
+                const handler = (e) => { e.preventDefault(); handleInteraction(i); };
+                cell.addEventListener('touchstart', handler, {passive: false});
+                cell.addEventListener('mousedown', handler);
+                
+                gridElement.appendChild(cell);
+                cells.push(cell);
+
+                setInterval(() => {
+                    if (gameActive && i !== targetIndex && i !== decoyIndex) {
+                        cell.innerText = Math.floor(Math.random() * 10);
+                        if(foundCount >= 4) {
+                            cell.style.color = '#3b82f6';
+                            cell.style.opacity = '0.4';
+                        } else {
+                            cell.style.color = difficultyFactor > 3.2 ? '#ef4444' : '#16a34a';
+                            cell.style.opacity = Math.random() * 0.4 + 0.3;
+                        }
+                    }
+                }, 100 + Math.random() * 250);
+            }
+        }
+
+        function updateUI() {
+            if (foundCount >= 4) {
+                speedDisplay.innerText = "ASSISTANCE ACTIVE";
+                speedDisplay.className = "text-sm font-black text-blue-400 animate-pulse";
+                gameContainer.classList.add('critical-bg', 'glitch-subtle');
+                targetLabel.innerText = "FRAGMENT FINAL";
+                topBar.style.borderColor = "rgba(59, 130, 246, 0.6)";
+                aidMessage.style.opacity = "1";
+                return;
+            }
+
+            aidMessage.style.opacity = "0";
+            if (difficultyFactor < 1.8) {
+                speedDisplay.innerText = "STABLE";
+                speedDisplay.className = "text-sm font-black text-green-500";
+                gameContainer.classList.remove('critical-bg', 'glitch-subtle');
+                targetLabel.innerText = "SCANNING";
+                topBar.style.borderColor = "rgba(34, 197, 94, 0.4)";
+            } else if (difficultyFactor < 3.5) {
+                speedDisplay.innerText = "ALERTE";
+                speedDisplay.className = "text-sm font-black text-yellow-500 animate-pulse";
+                gameContainer.classList.remove('glitch-subtle');
+                topBar.style.borderColor = "rgba(234, 179, 8, 0.4)";
+            } else {
+                speedDisplay.innerText = "CRITIQUE";
+                speedDisplay.className = "text-sm font-black text-red-600 animate-bounce";
+                gameContainer.classList.add('critical-bg');
+                if (Math.random() > 0.92) gameContainer.classList.add('glitch-subtle');
+                else gameContainer.classList.remove('glitch-subtle');
+                topBar.style.borderColor = "rgba(239, 68, 68, 0.6)";
+            }
+        }
+
+        function startGame() {
+            foundCount = 0;
+            timeLeft = INITIAL_TIME;
+            difficultyFactor = 4.0; 
+            gameActive = true;
+            modal.classList.add('hidden');
+            
+            for(let i=0; i<5; i++) {
+                document.getElementById(`p-${i}`).className = 'progress-node w-4 h-1.5 rounded-full bg-slate-800';
+            }
+            
+            playSound(120, 'square', 0.4, 0.2);
+            updateUI();
+            pickNewTarget();
+            startLoop();
+            scheduleNextSpawn();
+            scheduleNextDecoy();
+        }
+
+        function startLoop() {
+            clearInterval(gameTimerInterval);
+            gameTimerInterval = setInterval(() => {
+                timeLeft -= 0.1;
+                
+                if (difficultyFactor > 1.0 && foundCount < 4) {
+                    difficultyFactor -= COOLING_RATE;
+                }
+
+                if (timeLeft <= 0) {
+                    timeLeft = 0;
+                    gameOver(false);
+                }
+                
+                updateUI();
+                timerDisplay.innerText = timeLeft.toFixed(1) + "s";
+                timerDisplay.className = timeLeft < 5 ? "text-3xl font-bold text-red-500 animate-pulse tabular-nums" : "text-3xl font-bold text-white tabular-nums";
+            }, 100);
+        }
+
+        function pickNewTarget() {
+            const old = currentTarget;
+            do { currentTarget = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)]; } while (currentTarget === old);
+            targetDisplay.innerText = currentTarget;
+        }
+
+        function scheduleNextSpawn() {
+            if (!gameActive) return;
+            clearTimeout(spawnTimer);
+            const delay = Math.max(220, 850 - (difficultyFactor * 100));
+            spawnTimer = setTimeout(spawnTarget, delay);
+        }
+
+        function spawnTarget() {
+            if (!gameActive) return;
+            if (targetIndex !== -1) cells[targetIndex].classList.remove('target-active', 'final-target-active');
+            
+            do { targetIndex = Math.floor(Math.random() * cells.length); } while (targetIndex === decoyIndex);
+
+            const cell = cells[targetIndex];
+            cell.innerText = currentTarget;
+            
+            if (foundCount >= 4) {
+                cell.classList.add('final-target-active');
+            } else {
+                cell.classList.add('target-active');
+            }
+
+            const duration = Math.max(450, 1050 - (difficultyFactor * 100));
+            setTimeout(() => {
+                if (targetIndex === cells.indexOf(cell) && gameActive) {
+                    cell.classList.remove('target-active', 'final-target-active');
+                    targetIndex = -1;
+                    scheduleNextSpawn();
+                }
+            }, duration);
+        }
+
+        function scheduleNextDecoy() {
+            if (!gameActive) return;
+            clearTimeout(decoyTimer);
+            const delay = Math.max(500, 2000 - (difficultyFactor * 150));
+            decoyTimer = setTimeout(spawnDecoy, delay);
+        }
+
+        function spawnDecoy() {
+            if (!gameActive) return;
+            if (decoyIndex !== -1) cells[decoyIndex].classList.remove('decoy-active');
+            
+            do { decoyIndex = Math.floor(Math.random() * cells.length); } while (decoyIndex === targetIndex);
+
+            const cell = cells[decoyIndex];
+            cell.innerText = DECOY_SYMBOL;
+            cell.classList.add('decoy-active');
+
+            const duration = Math.max(600, 1500 - (difficultyFactor * 100));
+            setTimeout(() => {
+                if (decoyIndex === cells.indexOf(cell) && gameActive) {
+                    cell.classList.remove('decoy-active');
+                    decoyIndex = -1;
+                    scheduleNextDecoy();
+                }
+            }, duration);
+        }
+
+        // TOLERANCE LOGIC
+        function isHit(index, pivot) {
+            if (index === pivot) return true;
+            if (pivot === -1) return false;
+            
+            const r1 = Math.floor(index / COLS), c1 = index % COLS;
+            const r2 = Math.floor(pivot / COLS), c2 = pivot % COLS;
+            const dist = Math.abs(r1 - r2) + Math.abs(c1 - c2);
+            
+            // For the final lock (foundCount 4), we allow much more distance (2 cells + diagonals)
+            if (foundCount >= 4) {
+                const maxDist = Math.max(Math.abs(r1 - r2), Math.abs(c1 - c2));
+                return maxDist <= 2; // Huge square around the target
+            }
+            
+            return dist <= 1; // Standard Manhattan distance 1
+        }
+
+        function handleInteraction(index) {
+            if (!gameActive) return;
+
+            if (isHit(index, targetIndex)) {
+                document.getElementById(`p-${foundCount}`).classList.add('progress-active');
+                
+                if (foundCount === 4) {
+                    // Final Success
+                    flashOverlay.classList.add('flash-blue');
+                    playSound(440, 'sine', 0.1, 0.2);
+                    setTimeout(() => playSound(880, 'sine', 0.1, 0.2), 50);
+                    setTimeout(() => playSound(1760, 'sine', 0.2, 0.2), 100);
+                } else {
+                    // Standard Success
+                    flashOverlay.classList.add('flash-green');
+                    playSound(660, 'sine', 0.1, 0.2);
+                }
+                
+                foundCount++;
+                
+                if (targetIndex !== -1) cells[targetIndex].classList.remove('target-active', 'final-target-active');
+                targetIndex = -1;
+
+                if (foundCount === 4) {
+                    difficultyFactor = 4.2; 
+                    playSound(100, 'sawtooth', 0.6, 0.3);
+                    document.getElementById('p-4').classList.add('final-lock-node');
+                } else if (foundCount < 4) {
+                    difficultyFactor = Math.max(1.0, difficultyFactor - 0.9);
+                }
+
+                setTimeout(() => {
+                    flashOverlay.classList.remove('flash-green', 'flash-blue');
+                }, 300);
+
+                if (foundCount >= TARGETS_REQUIRED) gameOver(true);
+                else { pickNewTarget(); scheduleNextSpawn(); }
+            } else if (isHit(index, decoyIndex)) {
+                triggerPenalty(true);
+            } else {
+                triggerPenalty(false);
+            }
+        }
+
+        function triggerPenalty(isBomb) {
+            flashOverlay.classList.add('flash-red');
+            gameContainer.classList.add('glitch-subtle');
+            playSound(isBomb ? 50 : 90, 'sawtooth', 0.5, 0.3);
+            
+            // Bomb is very penalizing
+            difficultyFactor = Math.min(6.5, difficultyFactor + (isBomb ? 2.0 : 1.0)); 
+            if (navigator.vibrate) navigator.vibrate(isBomb ? [150, 50, 150] : 80);
+
+            setTimeout(() => {
+                flashOverlay.classList.remove('flash-red');
+                if (difficultyFactor < 3.8 && foundCount < 4) gameContainer.classList.remove('glitch-subtle');
+            }, 300);
+        }
+
+        function gameOver(isWin) {
+            gameActive = false;
+            clearInterval(gameTimerInterval);
+            clearTimeout(spawnTimer);
+            clearTimeout(decoyTimer);
+            gameContainer.classList.remove('glitch-subtle', 'critical-bg');
+            aidMessage.style.opacity = "0";
+            
+            modal.classList.remove('hidden');
+            const modalTitle = document.getElementById('modal-title');
+            const modalIcon = document.getElementById('modal-icon');
+            const modalDesc = document.getElementById('modal-desc');
+            const modalBtn = document.getElementById('start-btn');
+
+            if (isWin) {
+                modalTitle.innerText = "ACCÈS TOTAL";
+                modalTitle.className = "text-4xl font-black mb-4 text-green-500 italic uppercase tracking-tighter";
+                modalIcon.innerText = "🔓";
+                modalDesc.innerHTML = `Séquence validée.<br>Le verrou assisté a fonctionné.<br>Temps : <span class="text-white font-bold">${(INITIAL_TIME - timeLeft).toFixed(1)}s</span>.`;
+                modalBtn.className = "w-full bg-green-600 text-white font-black py-5 rounded-lg uppercase tracking-widest";
+                playSound(440, 'sine', 0.2);
+                setTimeout(() => playSound(880, 'sine', 0.5), 100);
+            } else {
+                modalTitle.innerText = "SYSTÈME CRASHÉ";
+                modalTitle.className = "text-4xl font-black mb-4 text-red-600 italic uppercase tracking-tighter animate-pulse";
+                modalIcon.innerText = "💀";
+                modalDesc.innerHTML = `Le pare-feu vous a éjecté.<br><br>Progression : ${foundCount}/5 fragments.`;
+                modalBtn.className = "w-full bg-red-600 text-white font-black py-5 rounded-lg uppercase tracking-widest";
+                playSound(40, 'square', 1.0);
+            }
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            startGame();
+        });
+
+        initGrid();
+    </script>
+</body>
+</html>
