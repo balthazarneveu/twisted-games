@@ -527,8 +527,8 @@
             stage.innerHTML = `<div class="flex flex-col items-center gap-10">
                 <div class="text-2xl font-black italic">PÉDALE !</div>
                 <div class="flex gap-20">
-                    <div id="pL" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95">L</div>
-                    <div id="pR" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95">R</div>
+                    <div id="pL" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95" style="touch-action: manipulation;">L</div>
+                    <div id="pR" class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-4xl border-4 border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-slate-200 active:scale-95" style="touch-action: manipulation;">R</div>
                 </div>
                 <div class="w-64 h-6 bg-slate-200 rounded-full overflow-hidden border border-slate-300 shadow-inner">
                     <div id="pB" class="h-full bg-blue-500 w-0 transition-all"></div>
@@ -540,18 +540,69 @@
             </div>`;
             const pL = document.getElementById('pL'), pR = document.getElementById('pR'), pB = document.getElementById('pB');
             let last = '', progress = 0;
+            let lastTapTime = { L: 0, R: 0 };
+            const TAP_DEBOUNCE_MS = 150; // Prevent rapid duplicate taps
+            
             const h = (s) => {
-                if (s === last) return; last = s; progress += 10; pB.style.width = `${progress}%`;
-                const el = s === 'L' ? pL : pR; el.style.background = "#e2e8f0"; setTimeout(() => el.style.background = "#f1f5f9", 100);
+                const now = Date.now();
+                // Debounce: ignore taps that are too close together on the same side
+                if (s === last && (now - lastTapTime[s]) < TAP_DEBOUNCE_MS) {
+                    return;
+                }
+                if (s === last) return; // Still prevent same-side consecutive taps for game logic
+                last = s; 
+                lastTapTime[s] = now;
+                progress += 10; 
+                pB.style.width = `${progress}%`;
+                const el = s === 'L' ? pL : pR; 
+                el.style.background = "#e2e8f0"; 
+                setTimeout(() => el.style.background = "#f1f5f9", 100);
                 if (progress >= 100) updateScore(true, "À FOND !");
             };
-            const handleClick = (s, e) => {
+            
+            const handlePedalL = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                h(s);
+                h('L');
             };
-            pL.onmousedown = pL.ontouchstart = (e) => handleClick('L', e);
-            pR.onmousedown = pR.ontouchstart = (e) => handleClick('R', e);
+            
+            const handlePedalR = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                h('R');
+            };
+            
+            // Use both touchstart and click for maximum compatibility
+            // touchstart fires first on mobile, click fires on desktop and also after touch on some devices
+            // We prevent default on touchstart to avoid the click event firing
+            let touchHandledL = false, touchHandledR = false;
+            
+            // Store references for cleanup
+            const touchStartL = (e) => {
+                touchHandledL = true;
+                handlePedalL(e);
+                setTimeout(() => { touchHandledL = false; }, 300);
+            };
+            const touchStartR = (e) => {
+                touchHandledR = true;
+                handlePedalR(e);
+                setTimeout(() => { touchHandledR = false; }, 300);
+            };
+            const clickL = (e) => {
+                if (!touchHandledL) {
+                    handlePedalL(e);
+                }
+            };
+            const clickR = (e) => {
+                if (!touchHandledR) {
+                    handlePedalR(e);
+                }
+            };
+            
+            pL.addEventListener('touchstart', touchStartL, {passive: false});
+            pL.addEventListener('click', clickL, {passive: false});
+            pR.addEventListener('touchstart', touchStartR, {passive: false});
+            pR.addEventListener('click', clickR, {passive: false});
             
             // Keyboard fallback for PC
             const handleKeyPress = (e) => {
@@ -566,10 +617,13 @@
                 }
             };
             window.addEventListener('keydown', handleKeyPress);
+            
             activeCleanup = () => {
                 window.removeEventListener('keydown', handleKeyPress);
-                pL.onmousedown = pL.ontouchstart = null;
-                pR.onmousedown = pR.ontouchstart = null;
+                pL.removeEventListener('touchstart', touchStartL);
+                pL.removeEventListener('click', clickL);
+                pR.removeEventListener('touchstart', touchStartR);
+                pR.removeEventListener('click', clickR);
             };
         }
 
