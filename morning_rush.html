@@ -130,7 +130,7 @@
     <div class="w-full space-y-4">
         <div class="flex justify-between items-end px-2">
             <div>
-                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Tricks: <span id="tricks-completed">0/3</span></div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Success: <span id="tricks-completed">0/3</span></div>
                 <div class="text-4xl font-black text-slate-900 italic">SCORE: <span id="score">0</span></div>
             </div>
             <div class="text-xs font-bold text-blue-500 uppercase tracking-widest pb-1">Mode Zen</div>
@@ -489,7 +489,8 @@
             angle += speed;
             pupil.setAttribute('cx', 120 + Math.sin(angle) * 70);
         }, 16);
-        stage.onclick = () => {
+        const handleClick = (e) => {
+            if (e) e.preventDefault();
             if (!game.active || drops <= 0) return;
             drops--;
             count.innerText = "💧".repeat(drops);
@@ -503,7 +504,9 @@
                 else if (drops === 0) handleFail("VIDE !");
             }, 350);
         };
-        return () => { clearInterval(loop); stage.onclick = null; };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
+        return () => { clearInterval(loop); };
     }
 
     // --- 2. SNOOZE ---
@@ -569,7 +572,8 @@
         </div>`;
         const toaster = document.getElementById('toaster');
         let c = 0;
-        stage.onclick = () => {
+        const handleClick = (e) => {
+            if (e) e.preventDefault();
             if (!game.active) return;
             c++; toaster.classList.add('shake'); setTimeout(() => toaster.classList.remove('shake'), 50);
             if (c >= 8) {
@@ -577,7 +581,9 @@
                 handleSuccess();
             }
         };
-        return () => { stage.onclick = null; };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
+        return () => {};
     }
 
     // --- 5. COFFEE ---
@@ -593,8 +599,17 @@
             liq.style.height = h + "%";
             if (h > 100) { clearInterval(flow); handleFail("DÉBORDÉ !"); }
         }, 16);
-        stage.onclick = () => { if (game.active) { clearInterval(flow); if (h >= 71 && h <= 92) handleSuccess(); else handleFail("MAUVAIS MOMENT"); } };
-        return () => { clearInterval(flow); stage.onclick = null; };
+        const handleClick = (e) => { 
+            if (e) e.preventDefault();
+            if (game.active) { 
+                clearInterval(flow); 
+                if (h >= 71 && h <= 92) handleSuccess(); 
+                else handleFail("MAUVAIS MOMENT"); 
+            } 
+        };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
+        return () => { clearInterval(flow); };
     }
 
     // --- 6. BALLOON ---
@@ -605,7 +620,8 @@
         </div>`;
         const pb = document.getElementById('pb');
         let s = 0.4;
-        stage.onclick = () => { 
+        const handleClick = (e) => { 
+            if (e) e.preventDefault();
             if (!game.active) return; 
             s += 0.22; 
             pb.style.transform = `scale(${s})`; 
@@ -616,8 +632,10 @@
                 handleFail("BOUM !"); 
             }
         };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
         game.validate = () => { if (s >= 1.6 && s <= 2.25) handleSuccess(); else handleFail("TROP PETIT"); };
-        return () => stage.onclick = null;
+        return () => {};
     }
 
     // --- 7. SHUTTERS ---
@@ -701,9 +719,12 @@
         const cork = document.getElementById('cork');
         const bottle = document.getElementById('bottle');
         let pressure = 0;
-        bottle.onclick = (e) => {
+        const handleClick = (e) => {
             if (!game.active) return;
-            e.stopPropagation();
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
             pressure++;
             bottle.classList.add('shake');
             setTimeout(() => bottle.classList.remove('shake'), 50);
@@ -715,7 +736,9 @@
                 handleSuccess();
             }
         };
-        return () => { bottle.onclick = null; };
+        addGlobalListener(bottle, 'mousedown', handleClick);
+        addGlobalListener(bottle, 'touchstart', handleClick);
+        return () => {};
     }
 
     // --- 11. ORANGE JUICE ---
@@ -731,15 +754,18 @@
             </div>`;
         const juice = document.getElementById('juice'), orange = document.getElementById('orange');
         let h = 0;
-        stage.onclick = () => {
+        const handleClick = (e) => {
+            if (e) e.preventDefault();
             if (!game.active) return;
             h += 7;
             juice.style.height = h + "%";
             orange.classList.add('shake'); setTimeout(() => orange.classList.remove('shake'), 50);
             if (h > 100) handleFail("DÉBORDÉ !");
         };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
         game.validate = () => { if (h >= 70 && h <= 95) handleSuccess(); else handleFail("PAS ASSEZ !"); };
-        return () => { stage.onclick = null; };
+        return () => {};
     }
 
     // --- 12. SUGAR ---
@@ -748,7 +774,8 @@
         const cup = document.getElementById('cup');
         let px = 0;
         const loop = setInterval(() => { px += (0.03 + (game.score * 0.002)); cup.style.transform = `translateX(${Math.sin(px) * 80}px)`; }, 16);
-        stage.onclick = () => {
+        const handleClick = (e) => {
+            if (e) e.preventDefault();
             if (!game.active) return;
             const s = document.createElement('div'); s.className = 'drop-anim sugar-cube'; s.innerText = 'SUCRE';
             stage.appendChild(s);
@@ -758,7 +785,9 @@
                 if (Math.abs(sr.left - cr.left - 40) < 55) handleSuccess(); else handleFail("À CÔTÉ");
             }, 350);
         };
-        return () => { clearInterval(loop); stage.onclick = null; };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
+        return () => { clearInterval(loop); };
     }
 
     // --- 13. LAMP SWIPE ---
@@ -822,8 +851,17 @@
             if (p > 50) ti.style.filter = `sepia(${(p-50)/50})`;
             if (p >= 100) { clearInterval(loop); ti.innerText = "🔥"; handleFail("TROP CUIT"); }
         }, 16);
-        stage.onclick = () => { if (game.active) { clearInterval(loop); if (p >= 65 && p <= 85) handleSuccess(); else handleFail("RATÉ"); } };
-        return () => { clearInterval(loop); stage.onclick = null; };
+        const handleClick = (e) => { 
+            if (e) e.preventDefault();
+            if (game.active) { 
+                clearInterval(loop); 
+                if (p >= 65 && p <= 85) handleSuccess(); 
+                else handleFail("RATÉ"); 
+            } 
+        };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
+        return () => { clearInterval(loop); };
     }
 
     // --- 16. EGG ---
@@ -835,8 +873,17 @@
             h += s; l.style.height = h + "%";
             if (h > 100) { clearInterval(loop); handleFail("BRULÉ"); }
         }, 16);
-        stage.onclick = () => { if (game.active) { clearInterval(loop); if (h >= 69 && h <= 86) handleSuccess(); else handleFail("CRU"); } };
-        return () => { clearInterval(loop); stage.onclick = null; };
+        const handleClick = (e) => { 
+            if (e) e.preventDefault();
+            if (game.active) { 
+                clearInterval(loop); 
+                if (h >= 69 && h <= 86) handleSuccess(); 
+                else handleFail("CRU"); 
+            } 
+        };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
+        return () => { clearInterval(loop); };
     }
 
     // --- 17. SHAVING ---
@@ -865,9 +912,22 @@
         stage.innerHTML = `<div class="relative flex items-center justify-center h-64 w-64"><div class="absolute text-8xl opacity-10 grayscale" style="transform: scale(2.0)">🎀</div><div id="pt" class="text-8xl transition-transform duration-100 z-10" style="transform: scale(0.4)">🎀</div></div>`;
         const pt = document.getElementById('pt');
         let s = 0.4;
-        stage.onclick = () => { if (!game.active) return; s += 0.22; pt.style.transform = `scale(${s})`; if (s > 2.25) { const rect = pt.getBoundingClientRect(); createExplosion(rect.left + rect.width/2, rect.top + rect.height/2, "#f472b6"); pt.style.display = "none"; handleFail("EXPLOSION !"); } };
+        const handleClick = (e) => { 
+            if (e) e.preventDefault();
+            if (!game.active) return; 
+            s += 0.22; 
+            pt.style.transform = `scale(${s})`; 
+            if (s > 2.25) { 
+                const rect = pt.getBoundingClientRect(); 
+                createExplosion(rect.left + rect.width/2, rect.top + rect.height/2, "#f472b6"); 
+                pt.style.display = "none"; 
+                handleFail("EXPLOSION !"); 
+            } 
+        };
+        addGlobalListener(stage, 'mousedown', handleClick);
+        addGlobalListener(stage, 'touchstart', handleClick);
         game.validate = () => { if (s >= 1.6 && s <= 2.25) handleSuccess(); else handleFail("TROP PETIT"); };
-        return () => stage.onclick = null;
+        return () => {};
     }
 
     document.addEventListener('touchstart', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
