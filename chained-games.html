@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chained Mini Games</title>
+    <title>mini jeux fous de balthou</title>
     <style>
         * {
             box-sizing: border-box;
@@ -375,9 +375,9 @@
 <body>
 
 <div id="start-screen">
-    <div id="start-title">CHAINED GAMES</div>
-    <button id="fullscreen-button">ENTER FULLSCREEN</button>
-    <div id="start-instruction">Click to start the game experience</div>
+    <div id="start-title">MINI JEUX FOUS DE BALTHOU</div>
+    <button id="fullscreen-button">Commencez la partie</button>
+    <div id="start-instruction">Cliquez pour commencer l'expérience de jeu</div>
 </div>
 
     <div id="game-wrapper">
@@ -385,13 +385,13 @@
 </div>
 
 <div id="transition-overlay">
-    <div id="transition-text">NEXT GAME...</div>
+    <div id="transition-text">PROCHAIN JEU...</div>
     <div id="game-result"></div>
-    <div id="total-score">Total Score: 0</div>
+    <div id="total-score">Score total : 0</div>
 </div>
 
 <div id="final-score-screen">
-    <div id="final-score-title">GAME COMPLETE</div>
+    <div id="final-score-title">PARTIE TERMINÉE</div>
     <div id="final-score-value">0</div>
     <div id="final-score-breakdown"></div>
 </div>
@@ -593,12 +593,12 @@
         const gameScore = gameScores[completedGame.id] || 0;
         
         // Show result feedback
-        resultDisplay.textContent = gameResult === 'won' ? '✓ SUCCESS' : '✗ FAILED';
+        resultDisplay.textContent = gameResult === 'won' ? '✓ RÉUSSI' : '✗ ÉCHOUÉ';
         resultDisplay.className = `show ${gameResult}`;
         
         // Show game name and score
         text.textContent = `${completedGame.label || completedGame.gameId}`;
-        scoreDisplay.textContent = `Score: ${gameScore.toLocaleString()} | Total: ${totalScore.toLocaleString()}`;
+        scoreDisplay.textContent = `Score : ${gameScore.toLocaleString()} | Total : ${totalScore.toLocaleString()}`;
         
         overlay.classList.add('show');
         
@@ -663,7 +663,7 @@
             }
 
             // Prepare for next game
-            text.textContent = 'NEXT GAME...';
+            text.textContent = 'PROCHAIN JEU...';
             resultDisplay.classList.remove('show', 'won', 'lost');
             resultDisplay.textContent = '';
             
@@ -752,14 +752,15 @@
         finalValue.textContent = totalScore.toLocaleString();
         
         // Create score breakdown with win/loss indicators
-        let breakdownHTML = '<div style="margin-bottom: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 5px;">Score Breakdown</div>';
+        let breakdownHTML = '<div style="margin-bottom: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 5px;">Détail des scores</div>';
         games.forEach(game => {
             const score = gameScores[game.id] || 0;
             const result = gameResults[game.id] || 'lost';
             const gameName = game.label || game.id.charAt(0).toUpperCase() + game.id.slice(1).replace('_', ' ');
             const resultIcon = result === 'won' ? '✓' : '✗';
             const resultColor = result === 'won' ? '#4ade80' : '#f87171';
-            breakdownHTML += `<div style="margin: 10px 0;">${resultIcon} ${gameName}: <span style="color: #00f2ff; font-weight: 600;">${score.toLocaleString()}</span> <span style="color: ${resultColor}; font-size: 0.9em;">(${result.toUpperCase()})</span></div>`;
+            const resultText = result === 'won' ? 'GAGNÉ' : 'PERDU';
+            breakdownHTML += `<div style="margin: 10px 0;">${resultIcon} ${gameName}: <span style="color: #00f2ff; font-weight: 600;">${score.toLocaleString()}</span> <span style="color: ${resultColor}; font-size: 0.9em;">(${resultText})</span></div>`;
         });
         finalBreakdown.innerHTML = breakdownHTML;
         
@@ -979,7 +980,7 @@
         
         // Update button text for iOS devices
         if (isIOS()) {
-            fullscreenButton.textContent = 'START GAME';
+            fullscreenButton.textContent = 'Commencez la partie';
         }
         
         // Listen for fullscreen changes
@@ -1015,7 +1016,7 @@
         // Ensure button is interactive
         fullscreenButton.style.pointerEvents = 'auto';
         fullscreenButton.setAttribute('role', 'button');
-        fullscreenButton.setAttribute('aria-label', 'Start game');
+        fullscreenButton.setAttribute('aria-label', 'Commencer la partie');
         
         // Click handler (desktop and mobile)
         fullscreenButton.addEventListener('click', handleStart, { passive: false });
