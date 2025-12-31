@@ -159,7 +159,20 @@
 
     <script>
         const canvas = document.getElementById('scratch-canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        // Fallback for iOS Safari which may not support willReadFrequently
+        let ctx = null;
+        try {
+            ctx = canvas.getContext('2d', { willReadFrequently: true });
+        } catch (e) {
+            console.warn('willReadFrequently not supported, falling back to standard context:', e);
+        }
+        if (!ctx) {
+            ctx = canvas.getContext('2d');
+        }
+        if (!ctx) {
+            console.error('Failed to get canvas context');
+            document.body.innerHTML = '<div style="color: white; padding: 20px; text-align: center;">Erreur: Canvas non supporté</div>';
+        }
         const prizeLayer = document.getElementById('prize-layer');
         const scoreDisplay = document.getElementById('total-score');
         const timerDisplay = document.getElementById('timer-display');
@@ -234,6 +247,7 @@
         }
 
         function drawFoil() {
+            if (!ctx) return;
             ctx.globalCompositeOperation = 'source-over';
             ctx.globalAlpha = 1.0;
             ctx.clearRect(0, 0, 320, 320);
@@ -377,6 +391,7 @@
         }
 
         function checkSymbols(x, y) {
+            if (!ctx) return;
             symbols.forEach(p => {
                 if (p.collected) return;
                 if (Math.hypot(p.x - x, p.y - y) < 45) {
@@ -399,7 +414,7 @@
         }
 
         function handleScratch(e) {
-            if (state !== 'SCRATCHING' || !isDrawing) return;
+            if (state !== 'SCRATCHING' || !isDrawing || !ctx) return;
             const { x, y } = getCoords(e);
             ctx.globalCompositeOperation = 'destination-out';
             ctx.globalAlpha = LEVEL.scratchOpacity;
